@@ -1,0 +1,140 @@
+set_price:
+  name: Set price
+  description: Sets the electricity price used to cost a cycle.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+    price_per_kwh:
+      required: true
+      example: 0.30
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 0.01
+          mode: box
+    currency:
+      required: false
+      example: EUR
+      selector:
+        text:
+
+set_reminder:
+  name: Set reminder
+  description: Configures the reminder for laundry left in the drum.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+    enabled:
+      required: true
+      selector:
+        boolean:
+    delay_minutes:
+      required: false
+      example: 30
+      selector:
+        number:
+          min: 1
+          max: 1440
+          mode: box
+    repeat_minutes:
+      required: false
+      example: 30
+      selector:
+        number:
+          min: 1
+          max: 1440
+          mode: box
+    max_repeats:
+      required: false
+      example: 3
+      selector:
+        number:
+          min: 1
+          max: 10
+          mode: box
+
+set_notify_target:
+  name: Set notification target
+  description: >-
+    Sets which notify service receives the reminder, e.g.
+    mobile_app_my_phone. Omit the target to disable notifications.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+    target:
+      required: false
+      example: mobile_app_my_phone
+      selector:
+        text:
+
+set_thresholds:
+  name: Set band thresholds
+  description: >-
+    Sets the power band edges in watts. Must increase strictly from standby
+    to high.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+    thresholds:
+      required: true
+      example: '{"standby": 2, "low": 20, "medium": 150, "high": 800}'
+      selector:
+        object:
+
+start_calibration:
+  name: Start calibration
+  description: >-
+    Records the next few complete runs and proposes band thresholds from
+    them. Detection keeps using the current thresholds meanwhile.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+
+cancel_calibration:
+  name: Cancel calibration
+  description: Stops recording and discards the collected samples.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+
+apply_calibration:
+  name: Apply calibration
+  description: Adopts the proposed thresholds. Fails if no proposal is ready.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+
+dismiss_reminder:
+  name: Dismiss reminder
+  description: Cancels a pending reminder for laundry left in the drum.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+
+clear_history:
+  name: Clear history
+  description: >-
+    Deletes all stored runs. The remaining-time estimate has to relearn
+    afterwards, and the weekly totals restart at zero.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:

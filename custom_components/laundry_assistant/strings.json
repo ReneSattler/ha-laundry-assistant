@@ -1,0 +1,84 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Laundry Assistant",
+        "description": "Which appliance do you want to track? Washing machines and tumble dryers have different power signatures and are set up separately.",
+        "menu_options": {
+          "washer": "Washing machine",
+          "dryer": "Tumble dryer"
+        }
+      },
+      "washer": {
+        "title": "Washing machine",
+        "description": "Choose the sensor that reports the plug's active power in watts. It has to update at least every 30 seconds - a slower interval misses the spin cycle entirely.",
+        "data": {
+          "name": "Name",
+          "power_entity": "Power sensor",
+          "door_entity": "Door sensor (optional)"
+        }
+      },
+      "dryer": {
+        "title": "Tumble dryer",
+        "description": "Choose the sensor that reports the plug's active power in watts. It has to update at least every 30 seconds - a slower interval misses the cool-down phase entirely.",
+        "data": {
+          "name": "Name",
+          "power_entity": "Power sensor",
+          "door_entity": "Door sensor (optional)"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This power sensor is already tracked by another appliance."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Reconfigure appliance",
+        "description": "Change which entities this appliance is tracked by. Thresholds, history and settings are kept.",
+        "data": {
+          "power_entity": "Power sensor",
+          "door_entity": "Door sensor (optional)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "phase": {
+        "name": "Phase",
+        "state": {
+          "idle": "Idle",
+          "intake": "Water intake",
+          "heating": "Heating",
+          "washing": "Washing",
+          "draining": "Draining",
+          "spinning": "Spinning",
+          "drying": "Drying",
+          "cooldown": "Cooling down",
+          "running": "Running",
+          "finished": "Finished"
+        }
+      },
+      "remaining": {
+        "name": "Remaining time"
+      },
+      "cycle_energy": {
+        "name": "Cycle energy"
+      },
+      "cycle_cost": {
+        "name": "Cycle cost"
+      },
+      "week_cycles": {
+        "name": "Cycles this week"
+      },
+      "week_energy": {
+        "name": "Energy this week"
+      },
+      "week_cost": {
+        "name": "Cost this week"
+      }
+    }
+  }
+}

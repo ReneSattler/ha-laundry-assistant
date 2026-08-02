@@ -1,19 +1,24 @@
 # Laundry Assistant
 
-Home Assistant integration that turns a plain power-metering smart plug into a
-detailed view of what your washing machine or tumble dryer is actually doing -
-which phase it is in, how much longer it will run, and what the cycle cost.
+*[Deutsche Version](README.de.md)*
 
-> **Status: early development.** The concept and the detection approach are
-> documented below, but the integration is not usable yet. Nothing here is
-> released or published to HACS.
+Home Assistant integration that turns a plain power-metering smart plug into
+a detailed view of what your washing machine or tumble dryer is actually
+doing - which phase it is in, how much longer it will run, and what the
+cycle cost.
+
+> **Status: not yet verified against real hardware.** The integration is
+> feature-complete and its logic is written, but it has not been run against
+> an actual washing machine or dryer, and the detection rules have not been
+> validated on recorded power curves. Treat this as a first draft, not a
+> release.
 
 ## Why
 
-A power-metering plug already tells you whether an appliance draws current, and
-most setups stop there: a template sensor flips a binary sensor to `on` above a
-few watts and back to `off` below it. That answers "is it running?" but not the
-questions you actually have while the machine runs:
+A power-metering plug already tells you whether an appliance draws current,
+and most setups stop there: a template sensor flips a binary sensor to `on`
+above a few watts and back to `off` below it. That answers "is it running?"
+but not the questions you actually have while the machine runs:
 
 - Is it still heating, or already spinning?
 - How much longer do I have before I need to be there?
@@ -25,45 +30,62 @@ manufacturer cloud, no hardware modification.
 
 ## How phase detection works
 
-An appliance's power draw is not a single number, it is a sequence of
-characteristic bands. A washing machine cycle looks roughly like this:
+The instantaneous wattage is ambiguous on its own: 350 W is either the pump
+draining or a spin cycle ramping up. What disambiguates it is the *sequence*.
+Detection therefore runs in two stages.
 
-| Phase | Signature |
+**1. Every reading is sorted into a band** - `off`, `standby`, `low`,
+`medium`, `high`. A band change only counts once it has held for 15 seconds,
+which swallows single-sample spikes (a heating element switching, a
+compressor starting) without filtering the raw values first.
+
+**2. A state machine with memory derives the phase** from the current band,
+how long it has held, and what the run has already been through:
+
+| Phase | What identifies it |
 |---|---|
-| Off / standby | < 2 W |
-| Water intake | brief spike, ~30-60 W |
-| Heating | 1800-2200 W, flat, sustained for minutes - the most distinctive marker |
-| Wash / tumble | 50-200 W, rhythmic on/off bursts as the drum reverses |
-| Drain | ~300-400 W, short |
-| Spin | ramp from ~200 W to 400-600 W, then falling |
-| Finished | back to standby, no further bursts |
+| Water intake | `low`, before any heating has occurred |
+| Heating | `high`, sustained - nothing else in a wash cycle draws two kilowatts |
+| Washing | rhythmic alternation between `low` and `medium`, *after* heating |
+| Draining | a short `medium` pulse |
+| Spinning | `medium` that holds longer than a drain pulse could |
+| Finished | back to `standby` or below, for four minutes |
 
-A tumble dryer is similar in structure: a heat-pump model draws a fairly
-constant 500-900 W, a condenser model cycles at 2000-2600 W, and both end with a
-clearly lower cool-down phase at ~100-200 W where only the drum still turns.
+A tumble dryer runs through `heating`, `drying` and `cooldown` with its own
+rules. The two common dryer types differ by a factor of three - a heat-pump
+model draws a fairly constant 500-900 W, a condenser model cycles at
+2000-2600 W - but both end with a clearly lower cool-down where only the drum
+still turns, which is what makes the end of the cycle detectable either way.
 
-Detection is therefore not machine learning. It is a **state machine with
-hysteresis**: classify each power sample into a band, then derive the phase from
-which bands have already been seen in this run. "High load has occurred, and now
-there is rhythmic medium load" means main wash. "A rising ramp past 300 W after a
-wash phase" means spin.
+Where the pattern does not match, the phase reported is a generic `running`
+with low confidence, rather than a specific phase that is probably wrong.
+Every phase carries a `confidence` attribute for this reason.
 
-Thresholds are per appliance, so the integration records a few complete runs
-during setup and proposes the band boundaries from the observed data rather than
-shipping guessed defaults.
+### Thresholds are calibrated, not guessed
 
-Remaining time is not estimated from a fixed program table either. Completed runs
-are stored with their phase timeline; a run whose phase sequence matches a stored
-one so far is expected to take about as long in total.
+The band edges depend on the appliance, so they are not hard-coded. Starting
+values ship per appliance type, and a calibration mode records the next three
+complete runs and proposes edges derived from the observed peak load. The
+proposal is shown for confirmation and can be overridden by hand - it is a
+starting point, not a measurement.
+
+### Remaining time is learned
+
+There is no program table. Each completed run is stored with its phase
+timeline; a run whose phase sequence matches a stored one so far is expected
+to take about as long in total. Until a comparable run exists, remaining time
+reports `unknown` rather than inventing a number.
 
 ## Requirements
 
-- A smart plug that reports **active power in watts** as its own sensor entity
-- That sensor must update **fast enough to see short phases**
+- A smart plug that reports **active power in watts** as its own sensor
+  entity (`device_class: power`). Sensors reporting kW are accepted and
+  converted.
+- That sensor must update **at least every 30 seconds**
 
-The second point is the one that trips people up. Tasmota, for example, sends
-telemetry every 300 seconds by default - at that rate a spin cycle can pass
-between two samples and is simply invisible. On Tasmota devices, set one of:
+The second point is the one that trips people up. Tasmota sends telemetry
+every 300 seconds by default - at that rate a spin cycle passes between two
+samples and is simply invisible. On Tasmota devices, set:
 
 ```
 TelePeriod 10
@@ -75,25 +97,89 @@ or, better, push on change instead of on a timer:
 PowerDelta 10
 ```
 
-Other firmware and integrations have equivalent settings. The integration will
-warn during setup when the observed update interval is too coarse for reliable
-detection.
+Other firmware has equivalent settings. The card shows a warning when the
+observed median update interval is too coarse for reliable detection.
 
-## Planned features
+## Features
 
-- Per-appliance phase sensor with the current phase and a confidence value
-- Estimated remaining time, learned from previous runs
-- Energy and cost per cycle, using a configurable price per kWh
-- "Load still in the drum" reminder, a configurable time after the cycle ends
-- A Lovelace card showing the phase timeline and the live power curve
-- Weekly summary: number of cycles, total energy, total cost
+- **Phase sensor** with the current phase and a confidence value
+- **Remaining time**, learned from previous runs of the same appliance
+- **Energy and cost per cycle**, from trapezoidal integration of the power
+  curve and a configurable price per kWh
+- **Weekly totals**: cycles, energy and cost
+- **Reminder** when the load is left in the drum - configurable delay,
+  repeat interval and maximum repeats, sent to a `notify.mobile_app_*`
+  service of your choice, defaulting to none. It stops when the appliance is
+  switched off, or when an optional door sensor opens.
+- **Two Lovelace cards**: a read-only status card (phase timeline, live power
+  curve, cycle figures, weekly summary) and a settings card (price, reminder,
+  thresholds, calibration)
+- **Calibration mode** that proposes band thresholds from your own runs
+
+## Entities
+
+Each appliance is a separate config entry and creates one device with seven
+sensors:
+
+| Entity | Description |
+|---|---|
+| `sensor.<name>_phase` | Current phase. Carries every attribute the cards read. |
+| `sensor.<name>_remaining_time` | Estimated minutes left, or unknown |
+| `sensor.<name>_cycle_energy` | kWh of the current or last cycle |
+| `sensor.<name>_cycle_cost` | Cost of the current or last cycle |
+| `sensor.<name>_cycles_this_week` | Completed runs this week |
+| `sensor.<name>_energy_this_week` | kWh this week |
+| `sensor.<name>_cost_this_week` | Cost this week |
+
+The week starts on Monday. Home Assistant does not expose the locale's first
+day of week to integrations, so one had to be chosen.
+
+## Services
+
+All services take the `entry_id` of the appliance, which the phase sensor
+exposes as an attribute.
+
+| Service | Purpose |
+|---|---|
+| `laundry_assistant.set_price` | Price per kWh, and optionally the currency |
+| `laundry_assistant.set_reminder` | Enable and configure the drum reminder |
+| `laundry_assistant.set_notify_target` | Which `notify.mobile_app_*` service to use |
+| `laundry_assistant.set_thresholds` | Band edges in watts |
+| `laundry_assistant.start_calibration` | Begin recording runs |
+| `laundry_assistant.cancel_calibration` | Stop and discard |
+| `laundry_assistant.apply_calibration` | Adopt the proposed thresholds |
+| `laundry_assistant.dismiss_reminder` | Cancel a pending reminder |
+| `laundry_assistant.clear_history` | Delete all stored runs |
 
 ## Installation
 
-Not yet available. Once the integration reaches a usable state it will be
-installable as a single HACS integration entry, with the card bundled inside it -
-the same packaging approach used by
+Not released yet. Once it works against real hardware it will be installable
+as a single HACS integration entry, with the cards bundled inside it and
+registering themselves on startup - the same packaging approach used by
 [ha-irrigation-sequencer](https://github.com/ReneSattler/ha-irrigation-sequencer).
+
+For now, copy `custom_components/laundry_assistant` into your
+`config/custom_components/` directory and restart Home Assistant. Use
+"Restart Home Assistant", not "Quick Reload" - the latter only reloads YAML
+and would keep running the previous Python code.
+
+Then go to **Settings → Devices & Services → Add Integration**, search for
+"Laundry Assistant", pick washing machine or tumble dryer, and select the
+plug's power sensor.
+
+## Testing
+
+`docker-compose.yml` starts a throwaway Home Assistant instance with this
+repository bind-mounted into its config directory:
+
+```bash
+docker compose up
+```
+
+Home Assistant then runs on <http://localhost:8123>. Since the real
+appliances are not reachable from that container, create an `input_number`
+helper and point the integration at it to drive a cycle by hand. See
+[issue #13](https://github.com/ReneSattler/ha-laundry-assistant/issues/13).
 
 ## License
 

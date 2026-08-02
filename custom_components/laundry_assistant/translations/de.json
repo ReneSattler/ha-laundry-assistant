@@ -1,0 +1,84 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Wäsche-Assistent einrichten",
+        "description": "Welches Gerät soll überwacht werden? Waschmaschine und Trockner haben unterschiedliche Leistungsverläufe und werden getrennt eingerichtet.",
+        "menu_options": {
+          "washer": "Waschmaschine",
+          "dryer": "Trockner"
+        }
+      },
+      "washer": {
+        "title": "Waschmaschine",
+        "description": "Wähle den Sensor, der die Wirkleistung der Steckdose in Watt meldet. Er muss mindestens alle 30 Sekunden aktualisieren - bei größeren Abständen wird der Schleudergang komplett übersehen.",
+        "data": {
+          "name": "Name",
+          "power_entity": "Leistungssensor",
+          "door_entity": "Türsensor (optional)"
+        }
+      },
+      "dryer": {
+        "title": "Trockner",
+        "description": "Wähle den Sensor, der die Wirkleistung der Steckdose in Watt meldet. Er muss mindestens alle 30 Sekunden aktualisieren - bei größeren Abständen wird die Abkühlphase komplett übersehen.",
+        "data": {
+          "name": "Name",
+          "power_entity": "Leistungssensor",
+          "door_entity": "Türsensor (optional)"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Dieser Leistungssensor wird bereits von einem anderen Gerät überwacht."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Gerät neu konfigurieren",
+        "description": "Ändert, über welche Entitäten dieses Gerät überwacht wird. Schwellwerte, Verlauf und Einstellungen bleiben erhalten.",
+        "data": {
+          "power_entity": "Leistungssensor",
+          "door_entity": "Türsensor (optional)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "phase": {
+        "name": "Phase",
+        "state": {
+          "idle": "Bereit",
+          "intake": "Wasseraufnahme",
+          "heating": "Heizen",
+          "washing": "Waschen",
+          "draining": "Abpumpen",
+          "spinning": "Schleudern",
+          "drying": "Trocknen",
+          "cooldown": "Abkühlen",
+          "running": "Läuft",
+          "finished": "Fertig"
+        }
+      },
+      "remaining": {
+        "name": "Restzeit"
+      },
+      "cycle_energy": {
+        "name": "Energie pro Durchgang"
+      },
+      "cycle_cost": {
+        "name": "Kosten pro Durchgang"
+      },
+      "week_cycles": {
+        "name": "Durchgänge diese Woche"
+      },
+      "week_energy": {
+        "name": "Energie diese Woche"
+      },
+      "week_cost": {
+        "name": "Kosten diese Woche"
+      }
+    }
+  }
+}

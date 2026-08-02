@@ -1,0 +1,25 @@
+# Throwaway Home Assistant instance for manual verification.
+#
+#   docker compose up
+#
+# then open http://localhost:8123 and complete onboarding. The integration
+# is bind-mounted read-only, so editing the source here and restarting the
+# container picks up the change - no copying.
+#
+# The real appliances are not reachable from this container. To drive a
+# cycle by hand, create an input_number helper in the test instance and
+# point the integration at it. See issue #13.
+
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: laundry-assistant-test
+    volumes:
+      # Instance config, kept out of git - safe to delete for a clean slate.
+      - ./.docker-config:/config
+      - ./custom_components/laundry_assistant:/config/custom_components/laundry_assistant:ro
+    ports:
+      - "8123:8123"
+    environment:
+      - TZ=Europe/Berlin
+    restart: unless-stopped

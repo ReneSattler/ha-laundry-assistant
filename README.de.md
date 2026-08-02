@@ -1,0 +1,196 @@
+# Wäsche-Assistent
+
+*[English version](README.md)*
+
+Home-Assistant-Integration, die aus einer gewöhnlichen Steckdose mit
+Leistungsmessung ablesbar macht, was Waschmaschine oder Trockner gerade
+tatsächlich tun - in welcher Phase sie stecken, wie lange es noch dauert und
+was der Durchgang gekostet hat.
+
+> **Status: noch nicht an echter Hardware geprüft.** Die Integration ist
+> vollständig implementiert, wurde aber noch nie gegen eine echte
+> Waschmaschine oder einen echten Trockner laufen gelassen, und die
+> Erkennungsregeln sind nicht an aufgezeichneten Leistungskurven validiert.
+> Das ist ein erster Entwurf, kein Release.
+
+## Warum
+
+Eine Steckdose mit Leistungsmessung sagt schon, ob ein Gerät Strom zieht, und
+die meisten Setups hören genau da auf: Ein Template-Sensor kippt einen
+Binärsensor über ein paar Watt auf `on` und darunter wieder auf `off`. Das
+beantwortet "läuft sie?", aber nicht die Fragen, die man während des Laufs
+wirklich hat:
+
+- Heizt sie noch, oder schleudert sie schon?
+- Wie lange habe ich noch, bevor ich danach schauen muss?
+- Was hat dieser Durchgang gekostet?
+- Liegt die Wäsche schon wieder seit Stunden in der Trommel?
+
+All das steckt bereits in der Leistungskurve - ohne Geräte-API, ohne
+Hersteller-Cloud, ohne Eingriff in die Hardware.
+
+## Wie die Phasenerkennung funktioniert
+
+Die Momentanleistung allein ist mehrdeutig: 350 W können die Laugenpumpe beim
+Abpumpen sein oder der beginnende Schleudergang. Eindeutig wird es erst durch
+die *Reihenfolge*. Die Erkennung läuft deshalb in zwei Stufen.
+
+**1. Jeder Messwert wird in ein Band einsortiert** - `off`, `standby`, `low`,
+`medium`, `high`. Ein Bandwechsel zählt erst, wenn er 15 Sekunden hält. Das
+schluckt einzelne Ausreißer (Heizstab schaltet, Kompressor läuft an), ohne
+die Rohwerte vorher filtern zu müssen.
+
+**2. Eine Zustandsmaschine mit Gedächtnis leitet die Phase ab** - aus dem
+aktuellen Band, wie lange es schon anliegt, und was in diesem Lauf vorher
+schon passiert ist:
+
+| Phase | Woran sie erkannt wird |
+|---|---|
+| Wasseraufnahme | `low`, bevor überhaupt geheizt wurde |
+| Heizen | `high`, über Minuten - nichts sonst im Waschgang zieht zwei Kilowatt |
+| Waschen | rhythmischer Wechsel zwischen `low` und `medium`, *nachdem* geheizt wurde |
+| Abpumpen | ein kurzer Stoß im Band `medium` |
+| Schleudern | `medium`, das länger hält, als ein Abpumpstoß dauern kann |
+| Fertig | zurück auf `standby` oder darunter, für vier Minuten |
+
+Ein Trockner durchläuft mit eigenen Regeln `Heizen`, `Trocknen` und
+`Abkühlen`. Die beiden verbreiteten Bauarten unterscheiden sich um den Faktor
+drei - ein Wärmepumpentrockner zieht recht konstant 500-900 W, ein
+Kondenstrockner taktet bei 2000-2600 W - aber beide enden mit einer deutlich
+niedrigeren Abkühlphase, in der nur noch die Trommel dreht. Genau das macht
+das Ende des Programms in beiden Fällen erkennbar.
+
+Wo das Muster nicht passt, wird bewusst die generische Phase `Läuft` mit
+niedriger Konfidenz gemeldet statt einer konkreten Phase, die vermutlich
+falsch wäre. Deshalb trägt jede Phase ein Attribut `confidence`.
+
+### Schwellwerte werden kalibriert, nicht geraten
+
+Die Bandgrenzen hängen vom Gerät ab und sind deshalb nicht fest verdrahtet.
+Pro Gerätetyp gibt es Startwerte, und ein Kalibriermodus zeichnet die
+nächsten drei kompletten Läufe auf und schlägt daraus Grenzen vor, abgeleitet
+von der beobachteten Spitzenlast. Der Vorschlag wird zur Bestätigung
+angezeigt und lässt sich von Hand überschreiben - er ist ein Ausgangspunkt,
+keine Messung.
+
+### Die Restzeit wird gelernt
+
+Es gibt keine Programmtabelle. Jeder abgeschlossene Lauf wird mit seiner
+Phasenabfolge gespeichert; ein Lauf, dessen Abfolge bisher zu einem
+gespeicherten passt, wird insgesamt ungefähr genauso lange dauern. Solange
+kein vergleichbarer Lauf existiert, meldet die Restzeit `unbekannt`, statt
+sich eine Zahl auszudenken.
+
+## Voraussetzungen
+
+- Eine Steckdose, die die **Wirkleistung in Watt** als eigene Sensor-Entität
+  meldet (`device_class: power`). Sensoren in kW werden erkannt und
+  umgerechnet.
+- Dieser Sensor muss **mindestens alle 30 Sekunden** aktualisieren
+
+Der zweite Punkt ist die übliche Stolperfalle. Tasmota sendet standardmäßig
+alle 300 Sekunden Telemetrie - in dem Takt liegt ein kompletter
+Schleudergang zwischen zwei Messwerten und ist schlicht unsichtbar. Auf
+Tasmota-Geräten also setzen:
+
+```
+TelePeriod 10
+```
+
+oder besser, bei Änderung senden statt nach Zeitplan:
+
+```
+PowerDelta 10
+```
+
+Andere Firmware hat entsprechende Einstellungen. Die Karte warnt, wenn der
+beobachtete Aktualisierungsabstand für eine verlässliche Erkennung zu grob
+ist.
+
+## Funktionen
+
+- **Phasen-Sensor** mit aktueller Phase und Konfidenzwert
+- **Restzeit**, gelernt aus früheren Läufen desselben Geräts
+- **Energie und Kosten pro Durchgang**, per Trapezintegration der
+  Leistungskurve und einem einstellbaren Preis pro kWh
+- **Wochensummen**: Durchgänge, Energie und Kosten
+- **Erinnerung**, wenn die Wäsche in der Trommel liegen bleibt - Verzögerung,
+  Wiederholungsabstand und maximale Anzahl einstellbar, an einen
+  `notify.mobile_app_*`-Dienst deiner Wahl, standardmäßig an keinen. Sie
+  endet, sobald das Gerät ausgeschaltet wird oder ein optionaler Türsensor
+  öffnet.
+- **Zwei Lovelace-Karten**: eine reine Status-Karte (Phasen-Zeitleiste, Live-
+  Leistungskurve, Kennzahlen zum Durchgang, Wochenübersicht) und eine
+  Einstellungs-Karte (Preis, Erinnerung, Schwellwerte, Kalibrierung)
+- **Kalibriermodus**, der Bandgrenzen aus deinen eigenen Läufen vorschlägt
+
+## Entitäten
+
+Jedes Gerät ist ein eigener Konfigurationseintrag und erzeugt ein Gerät mit
+sieben Sensoren:
+
+| Entität | Beschreibung |
+|---|---|
+| `sensor.<name>_phase` | Aktuelle Phase. Trägt alle Attribute, die die Karten lesen. |
+| `sensor.<name>_restzeit` | Geschätzte verbleibende Minuten, oder unbekannt |
+| `sensor.<name>_energie_pro_durchgang` | kWh des aktuellen oder letzten Durchgangs |
+| `sensor.<name>_kosten_pro_durchgang` | Kosten des aktuellen oder letzten Durchgangs |
+| `sensor.<name>_durchgange_diese_woche` | Abgeschlossene Läufe diese Woche |
+| `sensor.<name>_energie_diese_woche` | kWh diese Woche |
+| `sensor.<name>_kosten_diese_woche` | Kosten diese Woche |
+
+Die Woche beginnt am Montag. Home Assistant stellt Integrationen den ersten
+Wochentag der Locale nicht bereit, also musste einer gewählt werden.
+
+## Dienste
+
+Alle Dienste erwarten die `entry_id` des Geräts, die der Phasen-Sensor als
+Attribut bereitstellt.
+
+| Dienst | Zweck |
+|---|---|
+| `laundry_assistant.set_price` | Preis pro kWh, optional die Währung |
+| `laundry_assistant.set_reminder` | Trommel-Erinnerung aktivieren und einstellen |
+| `laundry_assistant.set_notify_target` | Welcher `notify.mobile_app_*`-Dienst benachrichtigt |
+| `laundry_assistant.set_thresholds` | Bandgrenzen in Watt |
+| `laundry_assistant.start_calibration` | Aufzeichnung starten |
+| `laundry_assistant.cancel_calibration` | Abbrechen und verwerfen |
+| `laundry_assistant.apply_calibration` | Vorgeschlagene Schwellwerte übernehmen |
+| `laundry_assistant.dismiss_reminder` | Laufende Erinnerung abbrechen |
+| `laundry_assistant.clear_history` | Alle gespeicherten Läufe löschen |
+
+## Installation
+
+Noch nicht veröffentlicht. Sobald es an echter Hardware funktioniert, wird es
+als einzelner HACS-Eintrag der Kategorie **Integration** installierbar sein,
+mit den Karten im Paket, die sich beim Start selbst registrieren - dieselbe
+Verpackung wie bei
+[ha-irrigation-sequencer](https://github.com/ReneSattler/ha-irrigation-sequencer).
+
+Bis dahin `custom_components/laundry_assistant` nach
+`config/custom_components/` kopieren und Home Assistant neu starten. Dabei
+**"Home Assistant neu starten"** verwenden, nicht "Schnellneustart" -
+letzterer lädt nur YAML neu und würde weiter den alten Python-Code ausführen.
+
+Danach **Einstellungen → Geräte & Dienste → Integration hinzufügen**, nach
+"Laundry Assistant" suchen, Waschmaschine oder Trockner wählen und den
+Leistungssensor der Steckdose auswählen.
+
+## Testen
+
+`docker-compose.yml` startet eine Wegwerf-Instanz von Home Assistant, in
+deren Konfigurationsverzeichnis dieses Repository eingehängt wird:
+
+```bash
+docker compose up
+```
+
+Home Assistant läuft dann auf <http://localhost:8123>. Da die echten Geräte
+aus dem Container nicht erreichbar sind, legt man dort einen
+`input_number`-Helfer an und richtet die Integration darauf aus, um einen
+Durchgang von Hand durchzuspielen. Siehe
+[Issue #13](https://github.com/ReneSattler/ha-laundry-assistant/issues/13).
+
+## Lizenz
+
+MIT - siehe [LICENSE](LICENSE).
