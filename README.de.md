@@ -11,10 +11,11 @@ was der Durchgang gekostet hat.
 > Erkennungsregeln, Lauferfassung, Energieintegration, Restzeitschätzung und
 > Kalibrierung wurden in einem Home-Assistant-Container mit dem
 > Replay-Werkzeug unter `tools/` durchgespielt - dabei kamen drei echte
-> Fehler in den Übergangsregeln heraus, die behoben sind. Was *nicht*
-> stattgefunden hat: ein Lauf an einer echten Waschmaschine oder einem
-> echten Trockner, und die Lovelace-Karten wurden noch nicht im Browser
-> gerendert.
+> Fehler in den Übergangsregeln heraus, die behoben sind - und sind von der
+> Testsuite abgedeckt. Die Karten unten sind aus dem echten Kartencode
+> gerendert. Was *nicht* stattgefunden hat: ein Lauf an einer echten
+> Waschmaschine oder einem echten Trockner. Ob Schwellwerte und Regeln zu
+> deiner Maschine passen, ist also weiterhin offen.
 
 ![Status- und Einstellungskarte während eines laufenden Durchgangs](screenshots/cards-running-de.png)
 ![Statuskarte nach einem Durchgang, mit Abweichungs-Warnung](screenshots/cards-anomaly-de.png)
@@ -60,9 +61,9 @@ schon passiert ist:
 |---|---|
 | Wasseraufnahme | `low`, bevor überhaupt geheizt wurde |
 | Heizen | `high`, über Minuten - nichts sonst im Waschgang zieht zwei Kilowatt |
-| Waschen | rhythmischer Wechsel zwischen `low` und `medium`, *nachdem* geheizt wurde |
-| Abpumpen | ein kurzer Stoß im Band `medium` |
-| Schleudern | `medium`, das länger hält, als ein Abpumpstoß dauern kann |
+| Waschen | Wechsel zwischen `low` und `medium`, *nachdem* geheizt wurde. Jede Trommelumkehr schiebt die Leistung kurz nach `medium`, deshalb muss `medium` einen einzelnen Stoß überdauern, um die Waschphase zu beenden |
+| Abpumpen | `medium` hält länger als ein Stoß, aber noch nicht lange genug für einen Schleudergang |
+| Schleudern | `medium`, das länger hält, als ein Abpumpstoß dauern kann. Wechselt es danach wieder zwischen `low` und `medium`, war es ein Zwischenschleudern und das Waschen geht weiter |
 | Fertig | zurück auf `standby` oder darunter, für vier Minuten |
 
 Ein Trockner durchläuft mit eigenen Regeln `Heizen`, `Trocknen` und
@@ -135,6 +136,13 @@ ist.
   Leistungskurve, Kennzahlen zum Durchgang, Wochenübersicht) und eine
   Einstellungs-Karte (Preis, Erinnerung, Schwellwerte, Kalibrierung)
 - **Kalibriermodus**, der Bandgrenzen aus deinen eigenen Läufen vorschlägt
+- **Abweichungs-Warnungen**: Jeder abgeschlossene Lauf wird mit gespeicherten
+  Läufen derselben Phasenabfolge verglichen, ein Kurzprogramm also nie an
+  einem Koch-/Buntwäscheprogramm gemessen. Fängt die schleichenden
+  Veränderungen ab, die man selbst nicht bemerkt - eine Heizphase, die über
+  Monate länger wird, weil der Heizstab verkalkt, ein doppelt so langes
+  Abpumpen, ein Durchgang, der ohne Schleudern endet. Meldet nichts, solange
+  keine fünf vergleichbaren Läufe vorliegen.
 
 ## Entitäten
 
@@ -169,6 +177,8 @@ Attribut bereitstellt.
 | `laundry_assistant.cancel_calibration` | Abbrechen und verwerfen |
 | `laundry_assistant.apply_calibration` | Vorgeschlagene Schwellwerte übernehmen |
 | `laundry_assistant.dismiss_reminder` | Laufende Erinnerung abbrechen |
+| `laundry_assistant.set_anomaly_detection` | Abweichungs-Warnungen aktivieren und Empfindlichkeit setzen |
+| `laundry_assistant.dismiss_anomalies` | Meldungen des letzten Laufs verwerfen |
 | `laundry_assistant.clear_history` | Alle gespeicherten Läufe löschen |
 
 ## Installation

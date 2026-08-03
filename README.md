@@ -11,9 +11,10 @@ cycle cost.
 > The detection rules, run tracking, energy integration, remaining-time
 > estimation and calibration have been exercised in a Home Assistant
 > container using the replay harness under `tools/` - which found and fixed
-> three real bugs in the transition rules. What has *not* happened is a run
-> against an actual washing machine or dryer, and the Lovelace cards have
-> not been rendered in a browser yet.
+> three real bugs in the transition rules - and are covered by the test
+> suite. The cards below are rendered from the real card code. What has
+> *not* happened is a run against an actual washing machine or dryer, so
+> whether the thresholds and rules match your machine is still open.
 
 ![Status and settings cards while a cycle is running](screenshots/cards-running-en.png)
 ![Status card after a cycle, with a deviation warning](screenshots/cards-anomaly-en.png)
@@ -57,9 +58,9 @@ how long it has held, and what the run has already been through:
 |---|---|
 | Water intake | `low`, before any heating has occurred |
 | Heating | `high`, sustained - nothing else in a wash cycle draws two kilowatts |
-| Washing | rhythmic alternation between `low` and `medium`, *after* heating |
-| Draining | a short `medium` pulse |
-| Spinning | `medium` that holds longer than a drain pulse could |
+| Washing | alternation between `low` and `medium`, *after* heating. Each drum reversal briefly pushes the draw into `medium`, so leaving the wash needs `medium` to outlast a single burst |
+| Draining | `medium` sustained past a burst, but not yet long enough to be a spin |
+| Spinning | `medium` that holds longer than a drain pulse could. Repeated `low`/`medium` alternation afterwards means it was an intermediate spin and washing continues |
 | Finished | back to `standby` or below, for four minutes |
 
 A tumble dryer runs through `heating`, `drying` and `cooldown` with its own
@@ -126,6 +127,12 @@ observed median update interval is too coarse for reliable detection.
   curve, cycle figures, weekly summary) and a settings card (price, reminder,
   thresholds, calibration)
 - **Calibration mode** that proposes band thresholds from your own runs
+- **Deviation warnings**: each finished run is compared against stored runs
+  with the same phase sequence, so a quick wash is never judged against a
+  cotton program. Catches the slow drifts nobody notices by eye - a heating
+  phase creeping longer as the element scales up, a drain taking twice as
+  long, a cycle that ends without a spin. Says nothing until five comparable
+  runs exist.
 
 ## Entities
 
@@ -160,6 +167,8 @@ exposes as an attribute.
 | `laundry_assistant.cancel_calibration` | Stop and discard |
 | `laundry_assistant.apply_calibration` | Adopt the proposed thresholds |
 | `laundry_assistant.dismiss_reminder` | Cancel a pending reminder |
+| `laundry_assistant.set_anomaly_detection` | Enable deviation warnings and set the sensitivity |
+| `laundry_assistant.dismiss_anomalies` | Clear the findings from the last run |
 | `laundry_assistant.clear_history` | Delete all stored runs |
 
 ## Installation
