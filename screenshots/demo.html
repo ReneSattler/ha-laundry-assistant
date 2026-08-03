@@ -67,6 +67,7 @@
       "mdi:alert": "⚠️",
       "mdi:alert-decagram": "❗",
       "mdi:bell-ring": "🔔",
+      "mdi:solar-power-variant": "☀️",
     };
     class HaIcon extends HTMLElement {
       connectedCallback() { this.textContent = ICONS[this.getAttribute("icon")] || "●"; }
@@ -154,6 +155,12 @@
       cycle_energy_kwh: 0.79,
       cycle_cost: 0.24,
       anomaly_messages: [],
+      current_program: {
+        id: "a1b2c3d4",
+        name: language === "de" ? "Buntwäsche 40" : "Cotton 40",
+        duration_seconds: 4320,
+        runs: 6,
+      },
     };
 
     const IDLE = {
@@ -170,6 +177,9 @@
       cycle_energy_kwh: 0.91,
       cycle_cost: 0.27,
       anomaly_messages: [],
+      // Idle is when a solar suggestion is worth making - during a cycle it
+      // is too late to act on.
+      solar_covers_cycle: true,
     };
 
     const ANOMALY = {
@@ -223,6 +233,25 @@
             anomalies: [],
             anomaly_detection_enabled: true,
             anomaly_factor: 1.6,
+            programs: [
+              {
+                id: "a1b2c3d4",
+                name: language === "de" ? "Buntwäsche 40" : "Cotton 40",
+                duration_seconds: 4320,
+                energy_kwh: 0.91,
+                runs: 6,
+              },
+              { id: "e5f6a7b8", name: "", duration_seconds: 1740, energy_kwh: 0.32, runs: 2 },
+            ],
+            current_program: null,
+            total_energy_kwh: 128.4,
+            feed_in_tariff: 0.08,
+            solar_entity: "sensor.balcony_pv_power",
+            consumption_entity: "sensor.house_power",
+            solar_surplus_w: 2240,
+            typical_draw_w: 2010,
+            solar_covers_cycle: false,
+            solar_saving_per_cycle: 0.2,
             ...variant,
           },
         },
