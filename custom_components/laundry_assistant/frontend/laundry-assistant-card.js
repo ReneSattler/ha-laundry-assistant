@@ -70,6 +70,14 @@ const STRINGS = {
     anomalyDetection: "Warn about unusual cycles",
     anomalySensitivity: "Report a deviation beyond",
     factorSuffix: "x normal",
+    solarBanner: "Solar would carry a cycle right now - saves about {saving} {currency}.",
+    solarEntity: "Solar production sensor",
+    consumptionEntity: "House consumption sensor",
+    feedInTariff: "Feed-in tariff",
+    programs: "Recognised programs",
+    unnamedProgram: "Unnamed",
+    runsSuffix: "runs",
+    save: "Save",
   },
   de: {
     idle: "Bereit",
@@ -124,6 +132,14 @@ const STRINGS = {
     anomalyDetection: "Vor ungewöhnlichen Durchgängen warnen",
     anomalySensitivity: "Melden ab Abweichung von",
     factorSuffix: "x normal",
+    solarBanner: "Die Sonne würde jetzt einen Durchgang tragen - spart etwa {saving} {currency}.",
+    solarEntity: "Sensor PV-Erzeugung",
+    consumptionEntity: "Sensor Hausverbrauch",
+    feedInTariff: "Einspeisevergütung",
+    programs: "Erkannte Programme",
+    unnamedProgram: "Unbenannt",
+    runsSuffix: "Läufe",
+    save: "Speichern",
   },
 };
 
@@ -265,6 +281,8 @@ class LaundryBaseCard extends HTMLElement {
         .banner ha-icon { --mdc-icon-size: 18px; color: var(--warning-color); flex-shrink: 0; }
         .banner.alert { background: rgba(var(--rgb-error-color, 219,68,55), 0.14); align-items: flex-start; }
         .banner.alert ha-icon { color: var(--error-color); }
+        .banner.solar { background: rgba(var(--rgb-success-color, 76,175,80), 0.16); }
+        .banner.solar ha-icon { color: var(--success-color); }
         .footer {
           display: flex; justify-content: space-between; align-items: center;
           margin-top: 14px; padding-top: 10px;
@@ -432,6 +450,20 @@ class LaundryStatusCard extends LaundryBaseCard {
           )}</button>
         </div>`;
     }
+    // Only worth suggesting while nothing is running - during a cycle it is
+    // too late to act on.
+    if (!a.run_active && a.solar_covers_cycle && a.solar_saving_per_cycle) {
+      html += `
+        <div class="banner solar">
+          <ha-icon icon="mdi:solar-power-variant"></ha-icon>
+          <div>${escapeHtml(
+            t(this._hass, "solarBanner", {
+              saving: formatNumber(a.solar_saving_per_cycle, 2),
+              currency: a.currency || "",
+            })
+          )}</div>
+        </div>`;
+    }
     const messages = a.anomaly_messages || [];
     if (messages.length) {
       html += `
@@ -465,8 +497,15 @@ class LaundryStatusCard extends LaundryBaseCard {
     const icon =
       a.appliance_type === "dryer" ? "mdi:tumble-dryer" : "mdi:washing-machine";
 
+    const programName = (a.current_program || {}).name;
     const subtitle = a.run_active
-      ? `${t(this._hass, state.state)}${remaining ? ` &middot; ${remaining}` : ""}`
+      ? [
+          programName ? escapeHtml(programName) : null,
+          t(this._hass, state.state),
+          remaining,
+        ]
+          .filter(Boolean)
+          .join(" &middot; ")
       : t(this._hass, state.state);
 
     this.innerHTML = `
@@ -551,6 +590,33 @@ class LaundrySettingsCard extends LaundryBaseCard {
     return Object.keys(services)
       .filter((name) => name.startsWith("mobile_app_"))
       .sort();
+  }
+
+  _renderPrograms() {
+    const programs = this._attrs.programs || [];
+    if (!programs.length) return "";
+    const rows = programs
+      .map(
+        (program) => `
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+          <input class="num" style="flex:1;text-align:left" type="text"
+                 data-program="${escapeHtml(program.id)}"
+                 placeholder="${escapeHtml(t(this._hass, "unnamedProgram"))}"
+                 value="${escapeHtml(program.name || "")}">
+          <span style="font-size:12px;color:var(--secondary-text-color);white-space:nowrap">
+            ${formatDuration(program.duration_seconds)} &middot; ${program.runs} ${escapeHtml(
+              t(this._hass, "runsSuffix")
+            )}
+          </span>
+        </div>`
+      )
+      .join("");
+
+    return `
+      <div class="row" style="flex-direction:column;align-items:stretch">
+        <div style="font-size:14px">${escapeHtml(t(this._hass, "programs"))}</div>
+        ${rows}
+      </div>`;
   }
 
   _renderCalibration() {
@@ -708,6 +774,28 @@ class LaundrySettingsCard extends LaundryBaseCard {
           )}</button>
         </div>
 
+        <div class="row">
+          <div class="grow">${escapeHtml(t(this._hass, "solarEntity"))}</div>
+          <input class="num" style="width:190px;text-align:left" type="text"
+                 data-field="solar-entity" placeholder="sensor.pv_power"
+                 value="${escapeHtml(a.solar_entity || "")}">
+        </div>
+        <div class="row">
+          <div class="grow">${escapeHtml(t(this._hass, "consumptionEntity"))}</div>
+          <input class="num" style="width:190px;text-align:left" type="text"
+                 data-field="consumption-entity" placeholder="sensor.house_power"
+                 value="${escapeHtml(a.consumption_entity || "")}">
+        </div>
+        <div class="row">
+          <div class="grow">${escapeHtml(t(this._hass, "feedInTariff"))}</div>
+          <input class="num" type="number" step="0.01" min="0"
+                 data-field="feed-in" value="${inputNumber(a.feed_in_tariff, 2)}">
+          <span style="font-size:13px;color:var(--secondary-text-color)">${escapeHtml(
+            a.currency || ""
+          )}</span>
+        </div>
+
+        ${this._renderPrograms()}
         ${this._renderCalibration()}
       </ha-card>
     `;
@@ -765,6 +853,26 @@ class LaundrySettingsCard extends LaundryBaseCard {
         },
       })
     );
+
+    const pushSolar = () =>
+      this._callService("set_solar", {
+        solar_entity: this.querySelector('[data-field="solar-entity"]').value || null,
+        consumption_entity:
+          this.querySelector('[data-field="consumption-entity"]').value || null,
+        feed_in_tariff: num("feed-in"),
+      });
+    ["solar-entity", "consumption-entity", "feed-in"].forEach((field) => {
+      this.querySelector(`[data-field="${field}"]`).addEventListener("change", pushSolar);
+    });
+
+    this.querySelectorAll("[data-program]").forEach((input) => {
+      input.addEventListener("change", () =>
+        this._callService("set_program_name", {
+          program_id: input.dataset.program,
+          name: input.value,
+        })
+      );
+    });
 
     const bind = (action, service) => {
       const el = this.querySelector(`[data-action="${action}"]`);

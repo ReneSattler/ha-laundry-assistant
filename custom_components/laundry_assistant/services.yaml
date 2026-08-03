@@ -171,3 +171,56 @@ dismiss_anomalies:
       required: true
       selector:
         text:
+
+set_program_name:
+  name: Name a program
+  description: >-
+    Gives a recognised program a name, e.g. "Cotton 60". The program ids are
+    listed in the phase sensor's "programs" attribute.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+    program_id:
+      required: true
+      selector:
+        text:
+    name:
+      required: true
+      example: Cotton 60
+      selector:
+        text:
+
+set_solar:
+  name: Set solar surplus sources
+  description: >-
+    Points the appliance at a solar production sensor and, optionally, a
+    house consumption sensor, so it can tell when a cycle would run on
+    surplus. Omit the solar entity to switch the suggestion off.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+    solar_entity:
+      required: false
+      selector:
+        entity:
+          domain: sensor
+          device_class: power
+    consumption_entity:
+      required: false
+      selector:
+        entity:
+          domain: sensor
+          device_class: power
+    feed_in_tariff:
+      required: false
+      example: 0.08
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 0.01
+          mode: box

@@ -19,17 +19,31 @@ class FakeState:
         self.attributes = {"unit_of_measurement": unit}
 
 
+class FakeStates:
+    """Just enough of the state machine for the solar surplus lookups."""
+
+    def __init__(self) -> None:
+        self._states: dict[str, FakeState] = {}
+
+    def get(self, entity_id: str) -> FakeState | None:
+        return self._states.get(entity_id)
+
+    def set(self, entity_id: str, watts, unit: str = "W") -> None:
+        self._states[entity_id] = FakeState(watts, unit)
+
+
 def stub_hass() -> MagicMock:
     """A `hass` good enough for the manager's non-detection needs.
 
-    The manager only touches hass for storage and for scheduling the save
-    after a run, neither of which affects detection. Closing the coroutine
+    The manager only touches hass for storage, for scheduling the save
+    after a run, and for reading the solar entities. Closing the coroutine
     handed to async_create_task keeps pytest from warning about a coroutine
     that was never awaited.
     """
     hass = MagicMock()
     hass.async_create_task = lambda coro: coro.close()
     hass.config.language = "en"
+    hass.states = FakeStates()
     return hass
 
 

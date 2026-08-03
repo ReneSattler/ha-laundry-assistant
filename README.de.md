@@ -99,26 +99,34 @@ sich eine Zahl auszudenken.
 - Eine Steckdose, die die **Wirkleistung in Watt** als eigene Sensor-Entität
   meldet (`device_class: power`). Sensoren in kW werden erkannt und
   umgerechnet.
-- Dieser Sensor muss **mindestens alle 30 Sekunden** aktualisieren
+- Er muss entweder **bei Änderung** melden oder in einem Takt von
+  **höchstens 30 Sekunden**
 
-Der zweite Punkt ist die übliche Stolperfalle. Tasmota sendet standardmäßig
-alle 300 Sekunden Telemetrie - in dem Takt liegt ein kompletter
-Schleudergang zwischen zwei Messwerten und ist schlicht unsichtbar. Auf
-Tasmota-Geräten also setzen:
+Tasmota sendet standardmäßig alle 300 Sekunden Telemetrie. In dem Takt liegt
+ein kompletter Schleudergang zwischen zwei Messwerten und ist schlicht
+unsichtbar. Also entweder den Takt verkürzen:
 
 ```
 TelePeriod 10
 ```
 
-oder besser, bei Änderung senden statt nach Zeitplan:
+oder besser, bei Änderung senden:
 
 ```
 PowerDelta 10
 ```
 
-Andere Firmware hat entsprechende Einstellungen. Die Karte warnt, wenn der
-beobachtete Aktualisierungsabstand für eine verlässliche Erkennung zu grob
-ist.
+Melden bei Änderung ist die bessere Wahl: Jeder Übergang wird exakt
+erfasst, und dazwischen gibt es nichts zu melden, weil die Last tatsächlich
+konstant ist. Die Integration wertet nach eigener Uhr aus statt nur beim
+Eintreffen eines Messwerts - die langen Funkstillen einer solchen Steckdose
+werden also korrekt behandelt, einschließlich der vier Minuten Ruhe am Ende
+eines Durchgangs, in denen ein ereignisgesteuerter Sensor überhaupt nichts
+sendet.
+
+Die Karte warnt, wenn ein **zeitgesteuerter** Sensor zu langsam eingestellt
+ist. Bei einem ereignisgesteuerten warnt sie nicht - dessen Lücken sind
+flache Phasen, keine zu grobe Einstellung.
 
 ## Funktionen
 
@@ -136,6 +144,18 @@ ist.
   Leistungskurve, Kennzahlen zum Durchgang, Wochenübersicht) und eine
   Einstellungs-Karte (Preis, Erinnerung, Schwellwerte, Kalibrierung)
 - **Kalibriermodus**, der Bandgrenzen aus deinen eigenen Läufen vorschlägt
+- **Programm-Erkennung**: Läufe werden nach Phasenabfolge *und* Phasendauern
+  gruppiert, ein Kurzprogramm also nie mit einem Koch-/Buntwäscheprogramm
+  gemittelt. Einmal benannt, werden passende Läufe automatisch zugeordnet -
+  und die Restzeit stützt sich auf diese Gruppe statt auf die ganze Historie.
+- **Gesamtenergie-Sensor** mit `state_class: total_increasing`, für das
+  Energie-Dashboard von Home Assistant
+- **PV-Überschuss-Vorschlag**: Mit konfiguriertem Erzeugungssensor schaltet
+  ein Binärsensor auf `an`, sobald der Überschuss die typische Leistung
+  dieses Geräts fünf Minuten lang gedeckt hat. Die angezeigte Ersparnis ist
+  die Differenz zwischen deinem Strompreis und der Einspeisevergütung -
+  nicht der volle Preis. Er schlägt nur vor; Einschalten ist bewusst nicht
+  vorgesehen.
 - **Abweichungs-Warnungen**: Jeder abgeschlossene Lauf wird mit gespeicherten
   Läufen derselben Phasenabfolge verglichen, ein Kurzprogramm also nie an
   einem Koch-/Buntwäscheprogramm gemessen. Fängt die schleichenden
@@ -158,6 +178,14 @@ sieben Sensoren:
 | `sensor.<name>_durchgange_diese_woche` | Abgeschlossene Läufe diese Woche |
 | `sensor.<name>_energie_diese_woche` | kWh diese Woche |
 | `sensor.<name>_kosten_diese_woche` | Kosten diese Woche |
+| `sensor.<name>_gesamtenergie` | kWh über alle Durchgänge - der Sensor fürs Energie-Dashboard |
+| `binary_sensor.<name>_sonne_deckt_einen_durchgang` | An, wenn PV-Überschuss einen Durchgang tragen würde |
+
+`cycle_energy` trägt bewusst **keine** `device_class: energy`: Die ist
+Zählern vorbehalten, die nur hochlaufen, und dieser Wert wird pro Durchgang
+zurückgesetzt. Fürs Energie-Dashboard `total_energy` verwenden. Das Löschen
+der Historie lässt `total_energy` absichtlich unangetastet - ein Zähler, der
+rückwärts springt, macht die Langzeitstatistik unrettbar kaputt.
 
 Die Woche beginnt am Montag. Home Assistant stellt Integrationen den ersten
 Wochentag der Locale nicht bereit, also musste einer gewählt werden.
@@ -179,7 +207,9 @@ Attribut bereitstellt.
 | `laundry_assistant.dismiss_reminder` | Laufende Erinnerung abbrechen |
 | `laundry_assistant.set_anomaly_detection` | Abweichungs-Warnungen aktivieren und Empfindlichkeit setzen |
 | `laundry_assistant.dismiss_anomalies` | Meldungen des letzten Laufs verwerfen |
-| `laundry_assistant.clear_history` | Alle gespeicherten Läufe löschen |
+| `laundry_assistant.set_program_name` | Einem erkannten Programm einen Namen geben |
+| `laundry_assistant.set_solar` | Erzeugungs- und Verbrauchssensor zuweisen |
+| `laundry_assistant.clear_history` | Alle gespeicherten Läufe löschen (Gesamtzähler bleibt) |
 
 ## Installation
 
@@ -226,6 +256,31 @@ Erkennung und gibt die entstehenden Phasen-Zeitleisten aus;
 `replay_behaviour.py` deckt Restzeit-Lernen, Kalibrierung, Wochensummen,
 kW-Sensoren, ein zu grobes Update-Intervall und einen kurzen Stromstoß ab,
 der nicht als Lauf gezählt werden darf.
+
+### Gegen die eigene Maschine testen
+
+Synthetische Kurven belegen nur, dass der Code tut, wofür er geschrieben
+wurde. Ob die Regeln zu einer echten Maschine passen, zeigt sich erst, wenn
+man ihre aufgezeichnete Historie in ein Fixture verwandelt und abspielt. Auf
+einer *Kopie* der Datenbank arbeiten - Home Assistant hält die laufende
+geöffnet.
+
+```bash
+python tools/export_history.py home-assistant_v2.db sensor.waschmaschine_leistung --out tests/fixtures
+```
+
+Das Skript zerlegt die Historie in Läufe, schreibt je eine CSV und meldet
+pro Lauf den mittleren Messabstand - eine zu grobe Aufzeichnung fällt so
+auf, statt still zu bleiben. Danach einen Lauf abspielen:
+
+```bash
+docker compose exec homeassistant python /repo/tools/replay_fixture.py /repo/tests/fixtures/<datei>.csv --type washer
+```
+
+Die ausgegebene Zeitleiste mit dem vergleichen, was die Maschine wirklich
+getan hat. Weichen sie ab, leitet `--calibrate` die Schwellwerte aus genau
+diesem Fixture ab. Achtung: Der Recorder räumt standardmäßig nach zehn Tagen
+auf - alles Ältere ist bereits weg.
 
 ## Lizenz
 

@@ -78,6 +78,14 @@
       },
       "week_cost": {
         "name": "Cost this week"
+      },
+      "total_energy": {
+        "name": "Total energy"
+      }
+    },
+    "binary_sensor": {
+      "solar_covers_cycle": {
+        "name": "Solar covers a cycle"
       }
     }
   }

@@ -43,6 +43,8 @@ from .const import (
     SERVICE_DISMISS_REMINDER,
     SERVICE_SET_ANOMALY_DETECTION,
     SERVICE_SET_NOTIFY_TARGET,
+    SERVICE_SET_PROGRAM_NAME,
+    SERVICE_SET_SOLAR,
     SERVICE_SET_PRICE,
     SERVICE_SET_REMINDER,
     SERVICE_SET_THRESHOLDS,
@@ -83,6 +85,21 @@ SET_ANOMALY_DETECTION_SCHEMA = vol.Schema(
         vol.Optional("factor"): vol.All(
             vol.Coerce(float), vol.Range(min=MIN_ANOMALY_FACTOR, max=MAX_ANOMALY_FACTOR)
         ),
+    }
+)
+SET_PROGRAM_NAME_SCHEMA = vol.Schema(
+    {
+        vol.Required("entry_id"): cv.string,
+        vol.Required("program_id"): cv.string,
+        vol.Required("name"): cv.string,
+    }
+)
+SET_SOLAR_SCHEMA = vol.Schema(
+    {
+        vol.Required("entry_id"): cv.string,
+        vol.Optional("solar_entity"): vol.Any(cv.entity_id, None),
+        vol.Optional("consumption_entity"): vol.Any(cv.entity_id, None),
+        vol.Optional("feed_in_tariff"): vol.All(vol.Coerce(float), vol.Range(min=0, max=10)),
     }
 )
 SET_THRESHOLDS_SCHEMA = vol.Schema(
@@ -292,6 +309,23 @@ def _async_register_services(hass: HomeAssistant) -> None:
         manager = _get_manager(hass, call.data["entry_id"])
         await manager.async_dismiss_anomalies()
 
+    async def handle_set_program_name(call: ServiceCall) -> None:
+        manager = _get_manager(hass, call.data["entry_id"])
+        try:
+            await manager.async_set_program_name(
+                call.data["program_id"], call.data["name"]
+            )
+        except ValueError as err:
+            raise ServiceValidationError(str(err)) from err
+
+    async def handle_set_solar(call: ServiceCall) -> None:
+        manager = _get_manager(hass, call.data["entry_id"])
+        await manager.async_set_solar(
+            call.data.get("solar_entity"),
+            call.data.get("consumption_entity"),
+            call.data.get("feed_in_tariff"),
+        )
+
     hass.services.async_register(
         DOMAIN, SERVICE_SET_PRICE, handle_set_price, schema=SET_PRICE_SCHEMA
     )
@@ -333,4 +367,13 @@ def _async_register_services(hass: HomeAssistant) -> None:
     )
     hass.services.async_register(
         DOMAIN, SERVICE_DISMISS_ANOMALIES, handle_dismiss_anomalies, schema=ENTRY_ID_ONLY_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_PROGRAM_NAME,
+        handle_set_program_name,
+        schema=SET_PROGRAM_NAME_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_SET_SOLAR, handle_set_solar, schema=SET_SOLAR_SCHEMA
     )

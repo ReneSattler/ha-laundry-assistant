@@ -41,3 +41,39 @@ transition rules:
 Also fixed: an empty `dependencies` list in the manifest, `idle` appearing
 as a segment in the timeline, and the bulk attributes being written to the
 recorder on every power sample.
+
+### Fixed after running a cycle in a real Home Assistant instance
+
+Driving the integration from an `input_number` inside the container - a
+sensor that reports only when its value changes, exactly like a plug
+configured with Tasmota's `PowerDelta` - exposed two failures that the
+synthetic curves could not, because those fed a reading every ten seconds:
+
+- **Nothing was ever detected.** A band change needs its dwell time to
+  elapse, and that was only ever checked when a reading arrived. On a
+  report-on-change sensor each reading sits in a different band from the
+  one before, so the dwell never had a second sample to confirm against.
+  The band stayed put, no run opened, and the four minutes of silence that
+  end a cycle - during which such a sensor says nothing at all - could
+  never close one either. There is now an evaluation tick that advances the
+  time-based rules on its own clock.
+- **Energy was understated by a third.** Integration averaged the two
+  endpoints of each interval, which assumes the load ramped between them.
+  A Home Assistant state holds until the next one arrives, so across the
+  five-minute silence a flat-out heating element produces, that turned a
+  step into a ramp. Now integrates left-hand, which is exact for a sensor
+  that reports on change.
+
+The "update interval too coarse" warning also no longer fires on
+event-driven sensors, whose long gaps are flat phases rather than a slow
+setting. It still fires on genuinely slow timer-driven ones.
+
+### Added
+
+- Program recognition: runs cluster by phase sequence and phase durations,
+  can be named, and sharpen the remaining-time estimate
+- A `total_increasing` lifetime energy sensor for the energy dashboard
+- Solar surplus suggestion, valued at the difference between the price paid
+  per kWh and the feed-in tariff rather than the full price
+- `tools/export_history.py` and `tools/replay_fixture.py`, to turn a real
+  appliance's recorded history into a fixture and replay it

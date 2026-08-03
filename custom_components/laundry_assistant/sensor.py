@@ -19,6 +19,16 @@ from .const import (
     ATTR_ANOMALY_FACTOR,
     ATTR_ANOMALY_MESSAGES,
     ATTR_APPLIANCE_TYPE,
+    ATTR_CONSUMPTION_ENTITY,
+    ATTR_CURRENT_PROGRAM,
+    ATTR_FEED_IN_TARIFF,
+    ATTR_PROGRAMS,
+    ATTR_SOLAR_COVERS_CYCLE,
+    ATTR_SOLAR_ENTITY,
+    ATTR_SOLAR_SAVING_PER_CYCLE,
+    ATTR_SOLAR_SURPLUS_W,
+    ATTR_TOTAL_ENERGY_KWH,
+    ATTR_TYPICAL_DRAW_W,
     ATTR_BAND,
     ATTR_CALIBRATION_PROPOSAL,
     ATTR_CALIBRATION_RUNS,
@@ -72,6 +82,7 @@ async def async_setup_entry(
             LaundryWeekCyclesSensor(manager, entry),
             LaundryWeekEnergySensor(manager, entry),
             LaundryWeekCostSensor(manager, entry),
+            LaundryTotalEnergySensor(manager, entry),
         ]
     )
 
@@ -120,6 +131,8 @@ class LaundryPhaseSensor(LaundryBaseSensor):
             ATTR_KNOWN_PHASES,
             ATTR_ANOMALIES,
             ATTR_ANOMALY_MESSAGES,
+            ATTR_PROGRAMS,
+            ATTR_CURRENT_PROGRAM,
         }
     )
 
@@ -176,6 +189,16 @@ class LaundryPhaseSensor(LaundryBaseSensor):
             ],
             ATTR_ANOMALY_DETECTION_ENABLED: manager.anomaly_detection_enabled,
             ATTR_ANOMALY_FACTOR: manager.anomaly_factor,
+            ATTR_PROGRAMS: manager.programs,
+            ATTR_CURRENT_PROGRAM: manager.current_program,
+            ATTR_TOTAL_ENERGY_KWH: manager.total_energy_kwh,
+            ATTR_FEED_IN_TARIFF: manager.feed_in_tariff,
+            ATTR_SOLAR_ENTITY: manager.solar_entity,
+            ATTR_CONSUMPTION_ENTITY: manager.consumption_entity,
+            ATTR_SOLAR_SURPLUS_W: manager.solar_surplus_w,
+            ATTR_TYPICAL_DRAW_W: manager.typical_draw_w,
+            ATTR_SOLAR_COVERS_CYCLE: manager.solar_covers_cycle,
+            ATTR_SOLAR_SAVING_PER_CYCLE: manager.solar_saving_per_cycle,
         }
 
 
@@ -268,6 +291,29 @@ class LaundryWeekEnergySensor(LaundryBaseSensor):
     @property
     def native_value(self) -> float:
         return self._manager.week_energy_kwh
+
+
+class LaundryTotalEnergySensor(LaundryBaseSensor):
+    """Lifetime energy across every completed cycle.
+
+    This is the one that belongs in the energy dashboard. `cycle_energy`
+    cannot: it resets with every cycle, and `total_increasing` means what it
+    says. Clearing the run history deliberately leaves this untouched -
+    a meter that jumps backwards makes long-term statistics unrecoverable.
+    """
+
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_native_unit_of_measurement = "kWh"
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_suggested_display_precision = 2
+    _attr_icon = "mdi:counter"
+
+    def __init__(self, manager: LaundryApplianceManager, entry: ConfigEntry) -> None:
+        super().__init__(manager, entry, "total_energy")
+
+    @property
+    def native_value(self) -> float:
+        return self._manager.total_energy_kwh
 
 
 class LaundryWeekCostSensor(LaundryBaseSensor):

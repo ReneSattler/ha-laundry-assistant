@@ -78,6 +78,14 @@
       },
       "week_cost": {
         "name": "Kosten diese Woche"
+      },
+      "total_energy": {
+        "name": "Gesamtenergie"
+      }
+    },
+    "binary_sensor": {
+      "solar_covers_cycle": {
+        "name": "Sonne deckt einen Durchgang"
       }
     }
   }

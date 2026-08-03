@@ -351,6 +351,70 @@ def find_anomalies(
     return findings
 
 
+def program_key(run: dict[str, Any]) -> list[tuple[str, float]]:
+    """The shape of a run: its phases and how long each one took."""
+    return [(entry["phase"], entry["seconds"]) for entry in run.get("timeline", [])]
+
+
+def runs_match(a: dict[str, Any], b: dict[str, Any], tolerance: float) -> bool:
+    """Whether two runs went through the same program.
+
+    Same phases in the same order, and every phase within `tolerance` of the
+    other run's duration. The durations matter: a quick wash and a cotton
+    program can produce an identical phase sequence and differ by an hour.
+    """
+    left, right = program_key(a), program_key(b)
+    if [phase for phase, _ in left] != [phase for phase, _ in right]:
+        return False
+    for (_, seconds_a), (_, seconds_b) in zip(left, right):
+        longer, shorter = max(seconds_a, seconds_b), min(seconds_a, seconds_b)
+        if shorter <= 0:
+            if longer > 30:
+                return False
+            continue
+        if longer / shorter > tolerance:
+            return False
+    return True
+
+
+def match_program(
+    run: dict[str, Any], programs: list[dict[str, Any]], tolerance: float
+) -> dict[str, Any] | None:
+    """The stored program a run belongs to, if any."""
+    for program in programs:
+        if runs_match(run, program, tolerance):
+            return program
+    return None
+
+
+def summarise_program(runs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Collapse the runs of one program into a representative shape."""
+    phases = [phase for phase, _ in program_key(runs[0])]
+    timeline = [
+        {
+            "phase": phase,
+            "seconds": round(
+                statistics.median(
+                    entry["seconds"]
+                    for run in runs
+                    for entry in run["timeline"]
+                    if entry["phase"] == phase
+                ),
+                1,
+            ),
+        }
+        for phase in dict.fromkeys(phases)
+    ]
+    return {
+        "timeline": timeline,
+        "duration_seconds": round(
+            statistics.median(run["duration_seconds"] for run in runs), 1
+        ),
+        "energy_kwh": round(statistics.median(run["energy_kwh"] for run in runs), 4),
+        "runs": len(runs),
+    }
+
+
 def _phases_present_in_most_runs(
     history: list[dict[str, Any]], min_runs: int
 ) -> list[str]:

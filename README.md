@@ -93,24 +93,33 @@ reports `unknown` rather than inventing a number.
 - A smart plug that reports **active power in watts** as its own sensor
   entity (`device_class: power`). Sensors reporting kW are accepted and
   converted.
-- That sensor must update **at least every 30 seconds**
+- It must report either **on change**, or on a timer of **30 seconds or
+  less**
 
-The second point is the one that trips people up. Tasmota sends telemetry
-every 300 seconds by default - at that rate a spin cycle passes between two
-samples and is simply invisible. On Tasmota devices, set:
+Tasmota sends telemetry every 300 seconds by default. At that rate a spin
+cycle passes between two readings and is simply invisible, so either shorten
+the timer:
 
 ```
 TelePeriod 10
 ```
 
-or, better, push on change instead of on a timer:
+or, better, push on change instead:
 
 ```
 PowerDelta 10
 ```
 
-Other firmware has equivalent settings. The card shows a warning when the
-observed median update interval is too coarse for reliable detection.
+Report-on-change is preferred: it captures every transition exactly, and
+between transitions there is nothing to report because the load really is
+constant. The integration re-evaluates on its own clock rather than only
+when a reading arrives, so the long silences such a plug produces are
+handled correctly - including the four minutes of quiet that end a cycle,
+during which an event-driven sensor says nothing at all.
+
+The card warns when a *timer-driven* sensor is set too slowly. It does not
+warn about an event-driven one, whose gaps are flat phases rather than a
+coarse setting.
 
 ## Features
 
@@ -127,6 +136,17 @@ observed median update interval is too coarse for reliable detection.
   curve, cycle figures, weekly summary) and a settings card (price, reminder,
   thresholds, calibration)
 - **Calibration mode** that proposes band thresholds from your own runs
+- **Program recognition**: runs cluster by phase sequence *and* phase
+  durations, so a quick wash is never averaged with a cotton program. Name a
+  cluster once and matching runs are labelled automatically - and the
+  remaining-time estimate uses that cluster instead of the whole history.
+- **Lifetime energy sensor** with `state_class: total_increasing`, for the
+  Home Assistant energy dashboard
+- **Solar surplus suggestion**: with a production sensor configured, a binary
+  sensor turns on when the surplus has covered this appliance's typical draw
+  for five minutes. The saving shown is the difference between what you pay
+  per kWh and what you are paid to export it - not the full price. It only
+  ever suggests; switching an appliance on is out of scope.
 - **Deviation warnings**: each finished run is compared against stored runs
   with the same phase sequence, so a quick wash is never judged against a
   cotton program. Catches the slow drifts nobody notices by eye - a heating
@@ -148,6 +168,14 @@ sensors:
 | `sensor.<name>_cycles_this_week` | Completed runs this week |
 | `sensor.<name>_energy_this_week` | kWh this week |
 | `sensor.<name>_cost_this_week` | Cost this week |
+| `sensor.<name>_total_energy` | Lifetime kWh across every cycle - the one for the energy dashboard |
+| `binary_sensor.<name>_solar_covers_a_cycle` | On when solar surplus would carry a cycle |
+
+`cycle_energy` deliberately carries no `device_class: energy`: that class is
+for meters that only count up, and it resets with every cycle. Use
+`total_energy` in the energy dashboard. Clearing the run history leaves
+`total_energy` untouched on purpose - a meter that jumps backwards makes
+long-term statistics unrecoverable.
 
 The week starts on Monday. Home Assistant does not expose the locale's first
 day of week to integrations, so one had to be chosen.
@@ -169,7 +197,9 @@ exposes as an attribute.
 | `laundry_assistant.dismiss_reminder` | Cancel a pending reminder |
 | `laundry_assistant.set_anomaly_detection` | Enable deviation warnings and set the sensitivity |
 | `laundry_assistant.dismiss_anomalies` | Clear the findings from the last run |
-| `laundry_assistant.clear_history` | Delete all stored runs |
+| `laundry_assistant.set_program_name` | Name a recognised program |
+| `laundry_assistant.set_solar` | Point the appliance at production and consumption sensors |
+| `laundry_assistant.clear_history` | Delete all stored runs (the lifetime energy meter is kept) |
 
 ## Installation
 
@@ -213,6 +243,30 @@ detection pipeline and prints the resulting phase timelines;
 `replay_behaviour.py` covers remaining-time learning, calibration, weekly
 totals, kW-reporting sensors, a too-coarse update interval, and a brief
 burst that must not be recorded as a run.
+
+### Testing against your own appliance
+
+Synthetic curves only prove the code does what it was written to do. To find
+out whether the rules match a real machine, turn its recorded history into a
+fixture and replay that. Work on a *copy* of the database - Home Assistant
+keeps the live one open.
+
+```bash
+python tools/export_history.py home-assistant_v2.db sensor.washing_machine_power --out tests/fixtures
+```
+
+It splits the history into runs, writes one CSV each, and reports the median
+sample interval per run so a too-coarse recording is visible rather than
+silent. Then replay one:
+
+```bash
+docker compose exec homeassistant python /repo/tools/replay_fixture.py /repo/tests/fixtures/<file>.csv --type washer
+```
+
+Compare the printed timeline against what the machine was actually doing. If
+they disagree, `--calibrate` derives thresholds from that fixture instead of
+using the defaults. Note the recorder purges after ten days by default, so
+anything older than that is already gone.
 
 ## License
 

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 DOMAIN = "laundry_assistant"
-PLATFORMS = ["sensor"]
+PLATFORMS = ["sensor", "binary_sensor"]
 
 # One config entry per appliance - a washing machine and a tumble dryer are
 # set up separately, each with its own power sensor, thresholds and history.
@@ -70,6 +70,12 @@ DEFAULT_THRESHOLDS = {
 # Swallows single-sample spikes (a compressor starting, a heating element
 # switching) without needing a filter over the raw values.
 BAND_DWELL_SECONDS = 15
+
+# How often the band, run state and phase are re-evaluated regardless of
+# whether a reading arrived. Plugs that report on change go silent between
+# load changes, and every time-based rule here - the dwell time, the
+# run-start threshold, the run-end threshold - would then never elapse.
+EVALUATION_TICK_SECONDS = 15
 
 # --------------------------------------------------------------------------- #
 # Phases
@@ -203,11 +209,49 @@ ANOMALY_MESSAGES_BY_LANGUAGE = {
 }
 
 # --------------------------------------------------------------------------- #
+# Program recognition
+# --------------------------------------------------------------------------- #
+# Runs cluster naturally: a cotton program at 60 degrees looks nothing like
+# a quick wash, and the difference is visible in the phase durations. Two
+# runs belong to the same program when they went through the same phases in
+# the same order and each phase took a comparable time.
+
+# How far each phase's duration may differ before two runs are considered
+# different programs.
+PROGRAM_TOLERANCE = 1.4
+# Programs are dropped once this many are stored, oldest first, so a machine
+# used in unusual ways does not accumulate clusters forever.
+MAX_PROGRAMS = 12
+# A cluster is only offered as a program once it has been seen this often -
+# a one-off run is not a program.
+PROGRAM_MIN_RUNS = 2
+
+# --------------------------------------------------------------------------- #
 # Cost
 # --------------------------------------------------------------------------- #
 
 DEFAULT_PRICE_PER_KWH = 0.30
 DEFAULT_CURRENCY = "EUR"
+# What the grid pays for a kWh that is exported instead of used. With a
+# fixed tariff there is no cheap hour to wait for, but every kWh taken from
+# your own production rather than exported is worth the difference between
+# these two numbers.
+DEFAULT_FEED_IN_TARIFF = 0.08
+
+# --------------------------------------------------------------------------- #
+# Solar surplus
+# --------------------------------------------------------------------------- #
+
+CONF_SOLAR_ENTITY = "solar_entity"
+CONF_CONSUMPTION_ENTITY = "consumption_entity"
+
+# The surplus has to exceed the appliance's typical draw by this margin
+# before a cycle is suggested - starting one that the sun cannot quite carry
+# would import the difference from the grid for the whole cycle.
+SOLAR_SURPLUS_MARGIN = 1.1
+# A cloud passing over should not retract the suggestion. The surplus must
+# hold for this long before it counts.
+SOLAR_SURPLUS_DWELL_SECONDS = 300
 
 # --------------------------------------------------------------------------- #
 # Reminder
@@ -244,6 +288,8 @@ SERVICE_DISMISS_REMINDER = "dismiss_reminder"
 SERVICE_CLEAR_HISTORY = "clear_history"
 SERVICE_SET_ANOMALY_DETECTION = "set_anomaly_detection"
 SERVICE_DISMISS_ANOMALIES = "dismiss_anomalies"
+SERVICE_SET_PROGRAM_NAME = "set_program_name"
+SERVICE_SET_SOLAR = "set_solar"
 
 # --------------------------------------------------------------------------- #
 # State attributes
@@ -291,6 +337,16 @@ ATTR_ANOMALIES = "anomalies"
 ATTR_ANOMALY_MESSAGES = "anomaly_messages"
 ATTR_ANOMALY_DETECTION_ENABLED = "anomaly_detection_enabled"
 ATTR_ANOMALY_FACTOR = "anomaly_factor"
+ATTR_PROGRAMS = "programs"
+ATTR_CURRENT_PROGRAM = "current_program"
+ATTR_TOTAL_ENERGY_KWH = "total_energy_kwh"
+ATTR_FEED_IN_TARIFF = "feed_in_tariff"
+ATTR_SOLAR_ENTITY = "solar_entity"
+ATTR_CONSUMPTION_ENTITY = "consumption_entity"
+ATTR_SOLAR_SURPLUS_W = "solar_surplus_w"
+ATTR_TYPICAL_DRAW_W = "typical_draw_w"
+ATTR_SOLAR_COVERS_CYCLE = "solar_covers_cycle"
+ATTR_SOLAR_SAVING_PER_CYCLE = "solar_saving_per_cycle"
 
 # How many points of the current run's power curve are handed to the card.
 # The full buffer would bloat every state update; the card only draws a
