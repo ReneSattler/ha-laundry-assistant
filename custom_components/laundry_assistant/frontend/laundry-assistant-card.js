@@ -140,6 +140,12 @@ const PHASE_COLORS = {
   idle: "var(--disabled-text-color, #bdbdbd)",
 };
 
+// The locale of whichever card rendered last. Number formatting has to
+// follow the instance language - a German dashboard showing "0.79 kWh"
+// instead of "0,79 kWh" looks like a bug to the person reading it - but
+// threading hass through every formatting call site would be noise.
+let activeLocale = "en";
+
 function lang(hass) {
   const code = (hass && (hass.locale?.language || hass.language)) || "en";
   return STRINGS[code.split("-")[0]] ? code.split("-")[0] : "en";
@@ -174,6 +180,16 @@ function formatDuration(seconds) {
 
 function formatNumber(value, digits) {
   if (value === null || value === undefined || Number.isNaN(value)) return "-";
+  return Number(value).toLocaleString(activeLocale, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
+// Number inputs only accept a dot as the decimal separator regardless of
+// locale, so the value written into one has to bypass formatNumber.
+function inputNumber(value, digits) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "";
   return Number(value).toFixed(digits);
 }
 
@@ -188,6 +204,7 @@ class LaundryBaseCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    activeLocale = lang(hass);
     this._render();
   }
 
@@ -613,7 +630,7 @@ class LaundrySettingsCard extends LaundryBaseCard {
         <div class="row">
           <div class="grow">${escapeHtml(t(this._hass, "price"))}</div>
           <input class="num" type="number" step="0.01" min="0" data-field="price"
-                 value="${formatNumber(a.price_per_kwh, 2)}">
+                 value="${inputNumber(a.price_per_kwh, 2)}">
           <span style="font-size:13px;color:var(--secondary-text-color)">${escapeHtml(
             a.currency || ""
           )}</span>
@@ -664,7 +681,7 @@ class LaundrySettingsCard extends LaundryBaseCard {
         <div class="row">
           <div class="grow">${escapeHtml(t(this._hass, "anomalySensitivity"))}</div>
           <input class="num" type="number" min="1.1" max="5" step="0.1"
-                 data-field="anomaly-factor" value="${formatNumber(a.anomaly_factor, 1)}">
+                 data-field="anomaly-factor" value="${inputNumber(a.anomaly_factor, 1)}">
           <span style="font-size:13px;color:var(--secondary-text-color)">${escapeHtml(
             t(this._hass, "factorSuffix")
           )}</span>
@@ -767,6 +784,7 @@ class LaundryCardEditorBase extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    activeLocale = lang(hass);
     this._render();
   }
 

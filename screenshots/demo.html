@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Laundry Assistant Cards - Demo</title>
+<style>
+  :root {
+    --primary-color: #03a9f4;
+    --success-color: #4caf50;
+    --warning-color: #ff9800;
+    --error-color: #db4437;
+    --info-color: #039be5;
+    --rgb-primary-color: 3, 169, 244;
+    --rgb-warning-color: 255, 152, 0;
+    --rgb-error-color: 219, 68, 55;
+    --disabled-text-color: #9e9e9e;
+    --primary-text-color: #212121;
+    --secondary-text-color: #727272;
+    --divider-color: #e0e0e0;
+    --card-background-color: #ffffff;
+    --secondary-background-color: #f0f2f5;
+    --primary-background-color: #fafafa;
+  }
+  body {
+    margin: 0;
+    padding: 32px;
+    background: var(--primary-background-color);
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--primary-text-color);
+    display: flex;
+    justify-content: center;
+  }
+  .frame { width: 420px; display: flex; flex-direction: column; gap: 16px; }
+
+  /* Minimal ha-card polyfill so the cards look right outside a real HA frontend */
+  ha-card {
+    display: block;
+    background: var(--card-background-color);
+    border-radius: 12px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  }
+  ha-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    font-size: 16px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+  <div class="frame">
+    <laundry-assistant-card id="status-card"></laundry-assistant-card>
+    <laundry-assistant-settings-card id="settings-card"></laundry-assistant-settings-card>
+  </div>
+
+  <script>
+    // Emoji stand-ins so ha-icon renders something here; real Home Assistant
+    // draws proper MDI vectors.
+    const ICONS = {
+      "mdi:washing-machine": "🧺",
+      "mdi:tumble-dryer": "🌀",
+      "mdi:tune": "🎛️",
+      "mdi:alert": "⚠️",
+      "mdi:alert-decagram": "❗",
+      "mdi:bell-ring": "🔔",
+    };
+    class HaIcon extends HTMLElement {
+      connectedCallback() { this.textContent = ICONS[this.getAttribute("icon")] || "●"; }
+      attributeChangedCallback() { this.connectedCallback(); }
+      static get observedAttributes() { return ["icon"]; }
+    }
+    class HaCard extends HTMLElement {}
+    class HaSwitch extends HTMLElement {
+      connectedCallback() { this._render(); }
+      get checked() { return this.hasAttribute("checked"); }
+      set checked(value) {
+        if (value) this.setAttribute("checked", ""); else this.removeAttribute("checked");
+        this._render();
+      }
+      _render() {
+        const on = this.checked;
+        this.style.cssText =
+          "display:inline-block;width:40px;height:22px;border-radius:11px;position:relative;" +
+          "cursor:pointer;background:" + (on ? "var(--primary-color)" : "#c4c4c4");
+        this.innerHTML =
+          '<span style="position:absolute;top:2px;' + (on ? "right" : "left") +
+          ':2px;width:18px;height:18px;border-radius:50%;background:#fff"></span>';
+      }
+    }
+    customElements.define("ha-icon", HaIcon);
+    customElements.define("ha-card", HaCard);
+    customElements.define("ha-switch", HaSwitch);
+  </script>
+
+  <!-- Classic (non-module) script: type="module" is blocked by CORS when the
+       page is opened from file://, which is exactly how the screenshots are
+       rendered. The card file has no import/export statements, so a plain
+       <script src> works everywhere, offline. -->
+  <script src="../custom_components/laundry_assistant/frontend/laundry-assistant-card.js"></script>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const scenario = params.get("scenario") || "running";
+    const language = params.get("lang") || "en";
+
+    // A washing machine's curve: intake, a long flat heating stretch, the
+    // wash tumbling, then the spin. Same shape the detection rules read.
+    function washerCurve(points) {
+      const out = [];
+      for (let i = 0; i < points; i++) {
+        const p = i / points;
+        if (p < 0.04) out.push(50);
+        else if (p < 0.34) out.push(1980 + Math.sin(i) * 40);
+        else if (p < 0.86) out.push(i % 6 < 3 ? 62 : 178);
+        else out.push(340 + (p - 0.86) * 1800);
+      }
+      return out;
+    }
+
+    const LAST_RUN = {
+      started: "2026-08-03T09:12:00+00:00",
+      finished: "2026-08-03T10:24:00+00:00",
+      duration_seconds: 4320,
+      energy_kwh: 0.91,
+      cost: 0.27,
+      peak_watts: 2010,
+      timeline: [
+        { phase: "intake", seconds: 180 },
+        { phase: "heating", seconds: 1320 },
+        { phase: "washing", seconds: 2100 },
+        { phase: "draining", seconds: 70 },
+        { phase: "spinning", seconds: 650 },
+      ],
+    };
+
+    const RUNNING = {
+      state: "washing",
+      run_active: true,
+      watts: 178,
+      band: "medium",
+      confidence: 0.9,
+      elapsed_seconds: 2280,
+      remaining_seconds: 2040,
+      estimated_total_seconds: 4320,
+      phase_timeline: [
+        { phase: "intake", start: "2026-08-03T18:02:00+00:00", seconds: 180 },
+        { phase: "heating", start: "2026-08-03T18:05:00+00:00", seconds: 1320 },
+      ],
+      power_curve: washerCurve(86),
+      cycle_energy_kwh: 0.79,
+      cycle_cost: 0.24,
+      anomaly_messages: [],
+    };
+
+    const IDLE = {
+      state: "finished",
+      run_active: false,
+      watts: 0.4,
+      band: "off",
+      confidence: 1.0,
+      elapsed_seconds: 0,
+      remaining_seconds: null,
+      estimated_total_seconds: null,
+      phase_timeline: [],
+      power_curve: [],
+      cycle_energy_kwh: 0.91,
+      cycle_cost: 0.27,
+      anomaly_messages: [],
+    };
+
+    const ANOMALY = {
+      ...IDLE,
+      anomaly_messages:
+        language === "de"
+          ? ["Heizen dauerte 44 min statt der üblichen 22 min."]
+          : ["heating took 44 min instead of the usual 22 min."],
+    };
+
+    const variant =
+      scenario === "idle" ? IDLE : scenario === "anomaly" ? ANOMALY : RUNNING;
+
+    const ENTITY = "sensor.washing_machine_phase";
+    const hass = {
+      language,
+      locale: { language },
+      services: {
+        notify: { mobile_app_iphone: {}, mobile_app_poco_x6_pro: {} },
+      },
+      states: {
+        [ENTITY]: {
+          entity_id: ENTITY,
+          state: variant.state,
+          attributes: {
+            friendly_name: language === "de" ? "Waschmaschine" : "Washing machine",
+            entry_id: "demo",
+            appliance_type: "washer",
+            power_entity: "sensor.washer_plug_power",
+            door_entity: null,
+            known_phases: ["intake", "heating", "washing", "draining", "spinning"],
+            last_run: LAST_RUN,
+            week_cycles: 4,
+            week_energy_kwh: 3.4,
+            week_cost: 1.02,
+            price_per_kwh: 0.3,
+            currency: "EUR",
+            thresholds: { standby: 2, low: 24, medium: 160, high: 1100 },
+            calibration_state: "inactive",
+            calibration_runs: 0,
+            calibration_runs_required: 3,
+            calibration_proposal: null,
+            update_interval_seconds: 10,
+            update_interval_ok: true,
+            reminder_enabled: true,
+            reminder_delay_minutes: 30,
+            reminder_repeat_minutes: 30,
+            reminder_max_repeats: 3,
+            reminder_pending: false,
+            notify_target: "mobile_app_iphone",
+            anomalies: [],
+            anomaly_detection_enabled: true,
+            anomaly_factor: 1.6,
+            ...variant,
+          },
+        },
+      },
+      callService: () => Promise.resolve(),
+    };
+
+    const config = { entity: ENTITY };
+    const statusCard = document.getElementById("status-card");
+    const settingsCard = document.getElementById("settings-card");
+    statusCard.setConfig(config);
+    settingsCard.setConfig(config);
+    statusCard.hass = hass;
+    settingsCard.hass = hass;
+  </script>
+</body>
+</html>

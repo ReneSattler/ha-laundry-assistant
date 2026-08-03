@@ -16,6 +16,15 @@ was der Durchgang gekostet hat.
 > echten Trockner, und die Lovelace-Karten wurden noch nicht im Browser
 > gerendert.
 
+![Status- und Einstellungskarte während eines laufenden Durchgangs](screenshots/cards-running-de.png)
+![Statuskarte nach einem Durchgang, mit Abweichungs-Warnung](screenshots/cards-anomaly-de.png)
+
+*Die Zeitleiste von links nach rechts: Wasseraufnahme, Heizen, Waschen,
+Abpumpen, Schleudern. `screenshots/demo.html` ist eine eigenständige Kopie
+der echten Karten, die sich in jedem Browser öffnen lässt - ohne
+Home-Assistant-Instanz. Die Symbole sind dort und in diesen Screenshots
+Emoji-Platzhalter; Home Assistant zeichnet echte MDI-Vektoren.*
+
 ## Warum
 
 Eine Steckdose mit Leistungsmessung sagt schon, ob ein Gerät Strom zieht, und
@@ -211,3 +220,17 @@ der nicht als Lauf gezählt werden darf.
 ## Lizenz
 
 MIT - siehe [LICENSE](LICENSE).
+
+## Screenshots neu erzeugen
+
+Die Screenshots entstehen aus `screenshots/demo.html`, das den echten
+Kartencode mit einem Mock-`hass` lädt - sie können also nicht auseinander
+laufen mit dem, was die Karten tatsächlich tun. Ein veralteter Screenshot
+mit einer älteren Oberfläche ist eine eigene Art von falscher Doku.
+
+```bash
+docker run --rm -v "$PWD:/repo" -w /repo mcr.microsoft.com/playwright/python:latest bash -c "pip install -q --break-system-packages playwright==1.46.0 && python screenshots/render.py"
+```
+
+Die Playwright-Version muss zu den im Image enthaltenen Browsern passen -
+deshalb ist sie festgenagelt und nicht einfach `playwright`.

@@ -15,6 +15,15 @@ cycle cost.
 > against an actual washing machine or dryer, and the Lovelace cards have
 > not been rendered in a browser yet.
 
+![Status and settings cards while a cycle is running](screenshots/cards-running-en.png)
+![Status card after a cycle, with a deviation warning](screenshots/cards-anomaly-en.png)
+
+*Left to right in the timeline: water intake, heating, washing, draining,
+spinning. `screenshots/demo.html` is a standalone copy of the real cards you
+can open in any browser to try them out without a Home Assistant instance.
+The icons are emoji stand-ins there and in these screenshots; Home Assistant
+draws proper MDI vectors.*
+
 ## Why
 
 A power-metering plug already tells you whether an appliance draws current,
@@ -199,3 +208,17 @@ burst that must not be recorded as a run.
 ## License
 
 MIT - see [LICENSE](LICENSE).
+
+## Regenerating the screenshots
+
+The screenshots are rendered from `screenshots/demo.html`, which loads the
+real card code with a mocked `hass` object - so they cannot drift away from
+what the cards actually do. A stale screenshot showing an older UI is its
+own kind of wrong documentation.
+
+```bash
+docker run --rm -v "$PWD:/repo" -w /repo mcr.microsoft.com/playwright/python:latest bash -c "pip install -q --break-system-packages playwright==1.46.0 && python screenshots/render.py"
+```
+
+The pinned playwright version has to match the browsers baked into the
+image, which is why it is not simply `playwright`.
