@@ -164,6 +164,45 @@ CALIBRATION_STATE_RECORDING = "recording"
 CALIBRATION_STATE_READY = "ready"
 
 # --------------------------------------------------------------------------- #
+# Anomaly detection
+# --------------------------------------------------------------------------- #
+# A finished run is compared against the stored runs that went the same way.
+# The point is to surface the slow drifts nobody notices by eye - a heating
+# phase creeping longer over months as the element scales up, a drain that
+# takes twice as long because the filter is clogging.
+
+ANOMALY_PHASE_LONGER = "phase_longer"
+ANOMALY_PHASE_SHORTER = "phase_shorter"
+ANOMALY_ENERGY_HIGHER = "energy_higher"
+ANOMALY_MISSING_PHASE = "missing_phase"
+
+DEFAULT_ANOMALY_DETECTION_ENABLED = True
+# How far a phase may stray from its usual duration before it is reported.
+DEFAULT_ANOMALY_FACTOR = 1.6
+MIN_ANOMALY_FACTOR = 1.1
+MAX_ANOMALY_FACTOR = 5.0
+# Comparable runs needed before the integration is willing to have an
+# opinion. Saying nothing beats crying wolf on the third ever wash.
+ANOMALY_MIN_RUNS = 5
+
+ANOMALY_MESSAGES_BY_LANGUAGE = {
+    "en": {
+        "title": "{appliance}: unusual cycle",
+        ANOMALY_PHASE_LONGER: "{phase} took {observed} min instead of the usual {expected} min.",
+        ANOMALY_PHASE_SHORTER: "{phase} took only {observed} min instead of the usual {expected} min.",
+        ANOMALY_ENERGY_HIGHER: "The cycle used {observed} kWh instead of the usual {expected} kWh.",
+        ANOMALY_MISSING_PHASE: "The cycle ended without a {phase} phase.",
+    },
+    "de": {
+        "title": "{appliance}: ungewöhnlicher Durchgang",
+        ANOMALY_PHASE_LONGER: "{phase} dauerte {observed} min statt der üblichen {expected} min.",
+        ANOMALY_PHASE_SHORTER: "{phase} dauerte nur {observed} min statt der üblichen {expected} min.",
+        ANOMALY_ENERGY_HIGHER: "Der Durchgang verbrauchte {observed} kWh statt der üblichen {expected} kWh.",
+        ANOMALY_MISSING_PHASE: "Der Durchgang endete ohne {phase}-Phase.",
+    },
+}
+
+# --------------------------------------------------------------------------- #
 # Cost
 # --------------------------------------------------------------------------- #
 
@@ -203,6 +242,8 @@ SERVICE_CANCEL_CALIBRATION = "cancel_calibration"
 SERVICE_APPLY_CALIBRATION = "apply_calibration"
 SERVICE_DISMISS_REMINDER = "dismiss_reminder"
 SERVICE_CLEAR_HISTORY = "clear_history"
+SERVICE_SET_ANOMALY_DETECTION = "set_anomaly_detection"
+SERVICE_DISMISS_ANOMALIES = "dismiss_anomalies"
 
 # --------------------------------------------------------------------------- #
 # State attributes
@@ -244,6 +285,12 @@ ATTR_REMINDER_REPEAT_MINUTES = "reminder_repeat_minutes"
 ATTR_REMINDER_MAX_REPEATS = "reminder_max_repeats"
 ATTR_REMINDER_PENDING = "reminder_pending"
 ATTR_NOTIFY_TARGET = "notify_target"
+ATTR_ANOMALIES = "anomalies"
+# The same findings rendered as sentences in the instance language, so the
+# card does not have to duplicate the message templates.
+ATTR_ANOMALY_MESSAGES = "anomaly_messages"
+ATTR_ANOMALY_DETECTION_ENABLED = "anomaly_detection_enabled"
+ATTR_ANOMALY_FACTOR = "anomaly_factor"
 
 # How many points of the current run's power curve are handed to the card.
 # The full buffer would bloat every state update; the card only draws a

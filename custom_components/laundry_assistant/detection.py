@@ -6,10 +6,15 @@ through it in a test without a running Home Assistant instance.
 """
 from __future__ import annotations
 
+import statistics
 from dataclasses import dataclass, field
 from typing import Any
 
 from .const import (
+    ANOMALY_ENERGY_HIGHER,
+    ANOMALY_MISSING_PHASE,
+    ANOMALY_PHASE_LONGER,
+    ANOMALY_PHASE_SHORTER,
     APPLIANCE_TYPE_DRYER,
     APPLIANCE_TYPE_WASHER,
     BAND_HIGH,
@@ -265,6 +270,97 @@ def propose_thresholds(samples: list[float], appliance_type: str) -> dict[str, f
         BAND_MEDIUM: round(medium, 1),
         BAND_HIGH: round(high, 1),
     }
+
+
+def find_anomalies(
+    run: dict[str, Any],
+    history: list[dict[str, Any]],
+    factor: float,
+    min_runs: int,
+) -> list[dict[str, Any]]:
+    """Compare a finished run against the runs that went the same way.
+
+    The comparison is against runs with an identical phase sequence, so a
+    quick wash is never measured against a cotton program. Within that set,
+    each phase's duration and the cycle's energy are compared to the median
+    rather than the mean - one pathological run should not move the
+    baseline it is being judged against.
+
+    Returns an empty list when there is not enough history to have an
+    opinion. Silence is the correct output for the first few runs.
+    """
+    sequence = [entry["phase"] for entry in run.get("timeline", [])]
+    comparable = [
+        past
+        for past in history
+        if [entry["phase"] for entry in past.get("timeline", [])] == sequence
+    ]
+
+    findings: list[dict[str, Any]] = []
+
+    # A phase that is present in most previous runs but missing here is
+    # worth reporting even though the sequence no longer matches - a wash
+    # that ended without a spin usually means the machine gave up on an
+    # unbalanced load.
+    if len(history) >= min_runs:
+        usual = _phases_present_in_most_runs(history, min_runs)
+        for phase in usual:
+            if phase not in sequence:
+                findings.append({"kind": ANOMALY_MISSING_PHASE, "phase": phase})
+
+    if len(comparable) < min_runs:
+        return findings
+
+    for phase in dict.fromkeys(sequence):
+        observed = sum(
+            entry["seconds"] for entry in run["timeline"] if entry["phase"] == phase
+        )
+        past_durations = [
+            sum(entry["seconds"] for entry in past["timeline"] if entry["phase"] == phase)
+            for past in comparable
+        ]
+        expected = statistics.median(past_durations)
+        if expected <= 0:
+            continue
+        if observed >= expected * factor:
+            kind = ANOMALY_PHASE_LONGER
+        elif observed <= expected / factor:
+            kind = ANOMALY_PHASE_SHORTER
+        else:
+            continue
+        findings.append(
+            {
+                "kind": kind,
+                "phase": phase,
+                "observed_seconds": round(observed),
+                "expected_seconds": round(expected),
+            }
+        )
+
+    observed_energy = run.get("energy_kwh", 0.0)
+    expected_energy = statistics.median(past["energy_kwh"] for past in comparable)
+    if expected_energy > 0 and observed_energy >= expected_energy * factor:
+        findings.append(
+            {
+                "kind": ANOMALY_ENERGY_HIGHER,
+                "observed_kwh": round(observed_energy, 3),
+                "expected_kwh": round(expected_energy, 3),
+            }
+        )
+
+    return findings
+
+
+def _phases_present_in_most_runs(
+    history: list[dict[str, Any]], min_runs: int
+) -> list[str]:
+    """Phases that appear in more than half of the recorded runs."""
+    counts: dict[str, int] = {}
+    for past in history:
+        for phase in {entry["phase"] for entry in past.get("timeline", [])}:
+            counts[phase] = counts.get(phase, 0) + 1
+    threshold = max(min_runs, len(history) // 2 + 1)
+    return [phase for phase, count in counts.items() if count >= threshold]
 
 
 def validate_thresholds(thresholds: dict[str, Any]) -> dict[str, float]:

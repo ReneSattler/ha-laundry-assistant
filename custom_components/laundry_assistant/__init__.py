@@ -33,11 +33,15 @@ from .const import (
     CONF_DOOR_ENTITY,
     CONF_POWER_ENTITY,
     DOMAIN,
+    MAX_ANOMALY_FACTOR,
+    MIN_ANOMALY_FACTOR,
     PLATFORMS,
     SERVICE_APPLY_CALIBRATION,
     SERVICE_CANCEL_CALIBRATION,
     SERVICE_CLEAR_HISTORY,
+    SERVICE_DISMISS_ANOMALIES,
     SERVICE_DISMISS_REMINDER,
+    SERVICE_SET_ANOMALY_DETECTION,
     SERVICE_SET_NOTIFY_TARGET,
     SERVICE_SET_PRICE,
     SERVICE_SET_REMINDER,
@@ -70,6 +74,15 @@ SET_NOTIFY_TARGET_SCHEMA = vol.Schema(
     {
         vol.Required("entry_id"): cv.string,
         vol.Optional("target"): vol.Any(cv.string, None),
+    }
+)
+SET_ANOMALY_DETECTION_SCHEMA = vol.Schema(
+    {
+        vol.Required("entry_id"): cv.string,
+        vol.Required("enabled"): cv.boolean,
+        vol.Optional("factor"): vol.All(
+            vol.Coerce(float), vol.Range(min=MIN_ANOMALY_FACTOR, max=MAX_ANOMALY_FACTOR)
+        ),
     }
 )
 SET_THRESHOLDS_SCHEMA = vol.Schema(
@@ -269,6 +282,16 @@ def _async_register_services(hass: HomeAssistant) -> None:
         manager = _get_manager(hass, call.data["entry_id"])
         await manager.async_clear_history()
 
+    async def handle_set_anomaly_detection(call: ServiceCall) -> None:
+        manager = _get_manager(hass, call.data["entry_id"])
+        await manager.async_set_anomaly_detection(
+            call.data["enabled"], call.data.get("factor")
+        )
+
+    async def handle_dismiss_anomalies(call: ServiceCall) -> None:
+        manager = _get_manager(hass, call.data["entry_id"])
+        await manager.async_dismiss_anomalies()
+
     hass.services.async_register(
         DOMAIN, SERVICE_SET_PRICE, handle_set_price, schema=SET_PRICE_SCHEMA
     )
@@ -301,4 +324,13 @@ def _async_register_services(hass: HomeAssistant) -> None:
     )
     hass.services.async_register(
         DOMAIN, SERVICE_CLEAR_HISTORY, handle_clear_history, schema=ENTRY_ID_ONLY_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_ANOMALY_DETECTION,
+        handle_set_anomaly_detection,
+        schema=SET_ANOMALY_DETECTION_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_DISMISS_ANOMALIES, handle_dismiss_anomalies, schema=ENTRY_ID_ONLY_SCHEMA
     )

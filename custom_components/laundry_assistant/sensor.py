@@ -14,6 +14,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
     ALL_PHASES,
+    ATTR_ANOMALIES,
+    ATTR_ANOMALY_DETECTION_ENABLED,
+    ATTR_ANOMALY_FACTOR,
+    ATTR_ANOMALY_MESSAGES,
     ATTR_APPLIANCE_TYPE,
     ATTR_BAND,
     ATTR_CALIBRATION_PROPOSAL,
@@ -114,6 +118,8 @@ class LaundryPhaseSensor(LaundryBaseSensor):
             ATTR_THRESHOLDS,
             ATTR_CALIBRATION_PROPOSAL,
             ATTR_KNOWN_PHASES,
+            ATTR_ANOMALIES,
+            ATTR_ANOMALY_MESSAGES,
         }
     )
 
@@ -164,6 +170,12 @@ class LaundryPhaseSensor(LaundryBaseSensor):
             ATTR_REMINDER_MAX_REPEATS: manager.reminder_max_repeats,
             ATTR_REMINDER_PENDING: manager.reminder_pending,
             ATTR_NOTIFY_TARGET: manager.notify_target,
+            ATTR_ANOMALIES: manager.last_anomalies,
+            ATTR_ANOMALY_MESSAGES: [
+                manager.describe_anomaly(finding) for finding in manager.last_anomalies
+            ],
+            ATTR_ANOMALY_DETECTION_ENABLED: manager.anomaly_detection_enabled,
+            ATTR_ANOMALY_FACTOR: manager.anomaly_factor,
         }
 
 

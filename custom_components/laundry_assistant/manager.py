@@ -18,6 +18,8 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    ANOMALY_MESSAGES_BY_LANGUAGE,
+    ANOMALY_MIN_RUNS,
     APPLIANCE_TYPE_WASHER,
     BAND_DWELL_SECONDS,
     BAND_LOW,
@@ -28,6 +30,8 @@ from .const import (
     CALIBRATION_STATE_INACTIVE,
     CALIBRATION_STATE_READY,
     CALIBRATION_STATE_RECORDING,
+    DEFAULT_ANOMALY_DETECTION_ENABLED,
+    DEFAULT_ANOMALY_FACTOR,
     DEFAULT_CURRENCY,
     DEFAULT_PRICE_PER_KWH,
     DEFAULT_REMINDER_DELAY_MINUTES,
@@ -53,6 +57,7 @@ from .detection import (
     PhaseContext,
     band_index,
     classify,
+    find_anomalies,
     next_phase,
     propose_thresholds,
     validate_thresholds,
@@ -109,6 +114,10 @@ class LaundryApplianceManager:
 
         self.runs: list[dict[str, Any]] = []
 
+        self.anomaly_detection_enabled: bool = DEFAULT_ANOMALY_DETECTION_ENABLED
+        self.anomaly_factor: float = DEFAULT_ANOMALY_FACTOR
+        self.last_anomalies: list[dict[str, Any]] = []
+
         self.calibration_state: str = CALIBRATION_STATE_INACTIVE
         self.calibration_runs: int = 0
         self.calibration_proposal: dict[str, float] | None = None
@@ -163,6 +172,11 @@ class LaundryApplianceManager:
                 "reminder_max_repeats", DEFAULT_REMINDER_MAX_REPEATS
             )
             self.notify_target = data.get("notify_target")
+            self.anomaly_detection_enabled = data.get(
+                "anomaly_detection_enabled", DEFAULT_ANOMALY_DETECTION_ENABLED
+            )
+            self.anomaly_factor = data.get("anomaly_factor", DEFAULT_ANOMALY_FACTOR)
+            self.last_anomalies = data.get("last_anomalies", [])
             self.runs = data.get("runs", [])[-MAX_STORED_RUNS:]
             self.last_run = data.get("last_run")
             self.calibration_state = data.get("calibration_state", CALIBRATION_STATE_INACTIVE)
@@ -212,6 +226,9 @@ class LaundryApplianceManager:
                 "reminder_repeat_minutes": self.reminder_repeat_minutes,
                 "reminder_max_repeats": self.reminder_max_repeats,
                 "notify_target": self.notify_target,
+                "anomaly_detection_enabled": self.anomaly_detection_enabled,
+                "anomaly_factor": self.anomaly_factor,
+                "last_anomalies": self.last_anomalies,
                 "runs": self.runs[-MAX_STORED_RUNS:],
                 "last_run": self.last_run,
                 "calibration_state": self.calibration_state,
@@ -418,12 +435,17 @@ class LaundryApplianceManager:
         # waking up, not a wash. Recording it would poison both the
         # remaining-time estimate and the weekly totals.
         if duration >= RUN_START_SECONDS * 3:
+            # Compare against the history as it stood *before* this run, so
+            # the run is never part of its own baseline.
+            self.last_anomalies = self._detect_anomalies(run)
             self.runs.append(run)
             self.runs = self.runs[-MAX_STORED_RUNS:]
             self.last_run = run
             if self.calibration_state == CALIBRATION_STATE_RECORDING:
                 self._record_calibration_run(samples)
             self._schedule_reminder(finished)
+            if self.last_anomalies:
+                self.hass.async_create_task(self._async_notify_anomalies())
 
         self.run_started = None
         self.phase = PHASE_FINISHED if duration >= RUN_START_SECONDS * 3 else PHASE_IDLE
@@ -635,6 +657,65 @@ class LaundryApplianceManager:
             # Door opened - the load has been dealt with.
             self._cancel_reminder()
             self._notify_listeners()
+
+    # ------------------------------------------------------------------ #
+    # Anomaly detection
+    # ------------------------------------------------------------------ #
+
+    def _detect_anomalies(self, run: dict[str, Any]) -> list[dict[str, Any]]:
+        if not self.anomaly_detection_enabled:
+            return []
+        return find_anomalies(run, self.runs, self.anomaly_factor, ANOMALY_MIN_RUNS)
+
+    def describe_anomaly(self, finding: dict[str, Any]) -> str:
+        """Render one finding as a sentence in the instance language."""
+        lang = (self.hass.config.language or "en").split("-")[0]
+        texts = ANOMALY_MESSAGES_BY_LANGUAGE.get(lang, ANOMALY_MESSAGES_BY_LANGUAGE["en"])
+        template = texts.get(finding["kind"], "")
+        return template.format(
+            phase=finding.get("phase", ""),
+            observed=round(finding.get("observed_seconds", 0) / 60)
+            if "observed_seconds" in finding
+            else finding.get("observed_kwh", ""),
+            expected=round(finding.get("expected_seconds", 0) / 60)
+            if "expected_seconds" in finding
+            else finding.get("expected_kwh", ""),
+        )
+
+    async def _async_notify_anomalies(self) -> None:
+        if not self.notify_target or not self.last_anomalies:
+            return
+        lang = (self.hass.config.language or "en").split("-")[0]
+        texts = ANOMALY_MESSAGES_BY_LANGUAGE.get(lang, ANOMALY_MESSAGES_BY_LANGUAGE["en"])
+        message = " ".join(self.describe_anomaly(f) for f in self.last_anomalies)
+        try:
+            await self.hass.services.async_call(
+                "notify",
+                self.notify_target,
+                {
+                    "title": texts["title"].format(appliance=self.name),
+                    "message": message,
+                },
+                blocking=False,
+            )
+        except Exception:  # noqa: BLE001 - a missing target must not break the run
+            _LOGGER.exception("Sending the anomaly notification for %s failed", self.name)
+
+    async def async_set_anomaly_detection(
+        self, enabled: bool, factor: float | None = None
+    ) -> None:
+        self.anomaly_detection_enabled = enabled
+        if factor is not None:
+            self.anomaly_factor = factor
+        if not enabled:
+            self.last_anomalies = []
+        await self._async_save()
+        self._notify_listeners()
+
+    async def async_dismiss_anomalies(self) -> None:
+        self.last_anomalies = []
+        await self._async_save()
+        self._notify_listeners()
 
     # ------------------------------------------------------------------ #
     # Calibration

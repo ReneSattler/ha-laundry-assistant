@@ -66,6 +66,10 @@ const STRINGS = {
     reminderPending: "A reminder is pending.",
     dismiss: "Dismiss",
     noEntity: "Entity not found",
+    anomalyTitle: "Unusual cycle",
+    anomalyDetection: "Warn about unusual cycles",
+    anomalySensitivity: "Report a deviation beyond",
+    factorSuffix: "x normal",
   },
   de: {
     idle: "Bereit",
@@ -116,6 +120,10 @@ const STRINGS = {
     reminderPending: "Eine Erinnerung ist aktiv.",
     dismiss: "Verwerfen",
     noEntity: "Entität nicht gefunden",
+    anomalyTitle: "Ungewöhnlicher Durchgang",
+    anomalyDetection: "Vor ungewöhnlichen Durchgängen warnen",
+    anomalySensitivity: "Melden ab Abweichung von",
+    factorSuffix: "x normal",
   },
 };
 
@@ -238,6 +246,8 @@ class LaundryBaseCard extends HTMLElement {
           color: var(--primary-text-color);
         }
         .banner ha-icon { --mdc-icon-size: 18px; color: var(--warning-color); flex-shrink: 0; }
+        .banner.alert { background: rgba(var(--rgb-error-color, 219,68,55), 0.14); align-items: flex-start; }
+        .banner.alert ha-icon { color: var(--error-color); }
         .footer {
           display: flex; justify-content: space-between; align-items: center;
           margin-top: 14px; padding-top: 10px;
@@ -405,6 +415,22 @@ class LaundryStatusCard extends LaundryBaseCard {
           )}</button>
         </div>`;
     }
+    const messages = a.anomaly_messages || [];
+    if (messages.length) {
+      html += `
+        <div class="banner alert">
+          <ha-icon icon="mdi:alert-decagram"></ha-icon>
+          <div style="flex:1">
+            <div style="font-weight:500;margin-bottom:2px">${escapeHtml(
+              t(this._hass, "anomalyTitle")
+            )}</div>
+            ${messages.map((m) => `<div>${escapeHtml(m)}</div>`).join("")}
+          </div>
+          <button class="action" data-action="dismiss-anomalies">${escapeHtml(
+            t(this._hass, "dismiss")
+          )}</button>
+        </div>`;
+    }
     return html;
   }
 
@@ -478,6 +504,12 @@ class LaundryStatusCard extends LaundryBaseCard {
     const dismiss = this.querySelector('[data-action="dismiss"]');
     if (dismiss) {
       dismiss.addEventListener("click", () => this._callService("dismiss_reminder"));
+    }
+    const dismissAnomalies = this.querySelector('[data-action="dismiss-anomalies"]');
+    if (dismissAnomalies) {
+      dismissAnomalies.addEventListener("click", () =>
+        this._callService("dismiss_anomalies")
+      );
     }
   }
 }
@@ -623,6 +655,21 @@ class LaundrySettingsCard extends LaundryBaseCard {
           <select class="pick" data-field="notify">${options}</select>
         </div>
 
+        <div class="row">
+          <div class="grow">${escapeHtml(t(this._hass, "anomalyDetection"))}</div>
+          <ha-switch data-field="anomaly-enabled"${
+            a.anomaly_detection_enabled ? " checked" : ""
+          }></ha-switch>
+        </div>
+        <div class="row">
+          <div class="grow">${escapeHtml(t(this._hass, "anomalySensitivity"))}</div>
+          <input class="num" type="number" min="1.1" max="5" step="0.1"
+                 data-field="anomaly-factor" value="${formatNumber(a.anomaly_factor, 1)}">
+          <span style="font-size:13px;color:var(--secondary-text-color)">${escapeHtml(
+            t(this._hass, "factorSuffix")
+          )}</span>
+        </div>
+
         <div class="row" style="flex-wrap:wrap">
           <div class="grow" style="min-width:100%;margin-bottom:8px">${escapeHtml(
             t(this._hass, "thresholds")
@@ -678,6 +725,17 @@ class LaundrySettingsCard extends LaundryBaseCard {
     const notify = this.querySelector('[data-field="notify"]');
     notify.addEventListener("change", () =>
       this._callService("set_notify_target", { target: notify.value || null })
+    );
+
+    const anomalyToggle = this.querySelector('[data-field="anomaly-enabled"]');
+    const pushAnomaly = (enabled) =>
+      this._callService("set_anomaly_detection", {
+        enabled,
+        factor: num("anomaly-factor"),
+      });
+    anomalyToggle.addEventListener("change", (ev) => pushAnomaly(ev.target.checked));
+    this.querySelector('[data-field="anomaly-factor"]').addEventListener("change", () =>
+      pushAnomaly(anomalyToggle.checked)
     );
 
     this.querySelector('[data-action="save-th"]').addEventListener("click", () =>
