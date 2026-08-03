@@ -101,6 +101,21 @@ class LaundryPhaseSensor(LaundryBaseSensor):
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = ALL_PHASES
     _attr_icon = "mdi:washing-machine"
+    # These attributes are lists and dicts that change on every power
+    # sample. The recorder would write a copy of each one several times a
+    # minute for the lifetime of the instance, for data the cards only ever
+    # read live. Keeping them out of history is the difference between a
+    # few kilobytes a day and a few hundred megabytes.
+    _unrecorded_attributes = frozenset(
+        {
+            ATTR_POWER_CURVE,
+            ATTR_PHASE_TIMELINE,
+            ATTR_LAST_RUN,
+            ATTR_THRESHOLDS,
+            ATTR_CALIBRATION_PROPOSAL,
+            ATTR_KNOWN_PHASES,
+        }
+    )
 
     def __init__(self, manager: LaundryApplianceManager, entry: ConfigEntry) -> None:
         super().__init__(manager, entry, "phase")
