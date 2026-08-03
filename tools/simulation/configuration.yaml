@@ -1,0 +1,33 @@
+# Drop-in configuration for the throwaway instance started by
+# docker-compose.yml. Copy over .docker-config/configuration.yaml after the
+# first boot and onboarding, then restart the container.
+#
+# The real appliances are not reachable from the container, so an
+# input_number stands in for the plug's power sensor. It only changes value
+# when the driving automation sets it - which makes it behave exactly like
+# a plug configured with Tasmota's PowerDelta, and that is the point: it is
+# the case that broke the integration once already.
+
+default_config:
+
+frontend:
+  themes: !include_dir_merge_named themes
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+input_number:
+  fake_washer_power:
+    name: Fake washer power
+    min: 0
+    max: 3000
+    step: 0.1
+    unit_of_measurement: W
+    mode: box
+
+logger:
+  default: warning
+  logs:
+    custom_components.laundry_assistant: debug
+    laundry_sim: debug

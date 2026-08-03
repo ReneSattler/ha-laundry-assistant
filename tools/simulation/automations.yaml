@@ -1,0 +1,99 @@
+# Copy over .docker-config/automations.yaml. Drives a wash cycle through the
+# fake power helper on every Home Assistant start, and writes the phase
+# transitions to the log so the run can be followed with
+# `docker compose logs` without authenticating against the instance.
+
+- id: laundry_sim_trace
+  alias: "Laundry sim - trace phase changes"
+  mode: queued
+  max: 50
+  triggers:
+    - trigger: state
+      entity_id: sensor.sim_washer_phase
+  conditions: []
+  actions:
+    - action: system_log.write
+      data:
+        level: warning
+        logger: laundry_sim
+        message: >-
+          PHASE {{ trigger.from_state.state if trigger.from_state else '?' }}
+          -> {{ trigger.to_state.state }}
+          | {{ state_attr('sensor.sim_washer_phase', 'watts') }} W
+          | band {{ state_attr('sensor.sim_washer_phase', 'band') }}
+          | confidence {{ state_attr('sensor.sim_washer_phase', 'confidence') }}
+          | elapsed {{ state_attr('sensor.sim_washer_phase', 'elapsed_seconds') }} s
+          | remaining {{ state_attr('sensor.sim_washer_phase', 'remaining_seconds') }}
+          | energy {{ state_attr('sensor.sim_washer_phase', 'cycle_energy_kwh') }} kWh
+
+- id: laundry_sim_cycle
+  alias: "Laundry sim - drive a wash cycle"
+  description: >-
+    A compressed but still valid washing machine cycle. Every stretch stays
+    longer than the detection constant it has to clear: the band dwell time
+    (15 s), the run-start threshold (60 s) and the run-end threshold (240 s).
+    Compressing further would not test the rules, it would break them.
+  mode: single
+  triggers:
+    - trigger: homeassistant
+      event: start
+  conditions: []
+  actions:
+    - action: system_log.write
+      data:
+        level: warning
+        logger: laundry_sim
+        message: "SIM starting a wash cycle"
+
+    - action: input_number.set_value
+      target: {entity_id: input_number.fake_washer_power}
+      data: {value: 0.5}
+    - delay: "00:01:00"
+
+    - action: input_number.set_value
+      target: {entity_id: input_number.fake_washer_power}
+      data: {value: 50}
+    - delay: "00:02:00"
+
+    - action: input_number.set_value
+      target: {entity_id: input_number.fake_washer_power}
+      data: {value: 2000}
+    - delay: "00:05:00"
+
+    - repeat:
+        count: 8
+        sequence:
+          - action: input_number.set_value
+            target: {entity_id: input_number.fake_washer_power}
+            data: {value: 60}
+          - delay: "00:00:30"
+          - action: input_number.set_value
+            target: {entity_id: input_number.fake_washer_power}
+            data: {value: 180}
+          - delay: "00:00:30"
+
+    - action: input_number.set_value
+      target: {entity_id: input_number.fake_washer_power}
+      data: {value: 350}
+    - delay: "00:01:30"
+
+    - action: input_number.set_value
+      target: {entity_id: input_number.fake_washer_power}
+      data: {value: 520}
+    - delay: "00:04:00"
+
+    - action: input_number.set_value
+      target: {entity_id: input_number.fake_washer_power}
+      data: {value: 0.4}
+    - delay: "00:06:00"
+
+    - action: system_log.write
+      data:
+        level: warning
+        logger: laundry_sim
+        message: >-
+          SIM finished. phase={{ states('sensor.sim_washer_phase') }}
+          duration={{ (state_attr('sensor.sim_washer_phase', 'last_run') or {}).get('duration_seconds') }} s
+          energy={{ (state_attr('sensor.sim_washer_phase', 'last_run') or {}).get('energy_kwh') }} kWh
+          cost={{ (state_attr('sensor.sim_washer_phase', 'last_run') or {}).get('cost') }}
+          timeline={{ (state_attr('sensor.sim_washer_phase', 'last_run') or {}).get('timeline') }}

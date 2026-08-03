@@ -257,6 +257,32 @@ Erkennung und gibt die entstehenden Phasen-Zeitleisten aus;
 kW-Sensoren, ein zu grobes Update-Intervall und einen kurzen Stromstoß ab,
 der nicht als Lauf gezählt werden darf.
 
+### Einen Durchgang in dieser Instanz simulieren
+
+`tools/simulation/` fährt einen kompletten Waschgang durch die laufende
+Instanz - die Integration wird also von Anfang bis Ende geprüft
+(Konfigurationseintrag, Entitäten, Auslieferung der Karte), nicht nur ihre
+Logik. Ohne Anmeldung.
+
+```bash
+docker compose up -d          # einmal, dann im Browser das Onboarding durchklicken
+docker compose stop
+cp tools/simulation/*.yaml .docker-config/
+python tools/simulation/seed_config_entry.py .docker-config
+docker compose up -d
+docker compose logs -f | grep laundry_sim
+```
+
+Ein `input_number` steht stellvertretend für die Steckdose. Das ist Absicht:
+Er ändert seinen Wert nur, wenn die Automatisierung ihn setzt - genau so
+verhält sich eine Steckdose mit `PowerDelta`. Dieser Fall hat die
+Integration schon einmal lahmgelegt, auf eine Art, die keine synthetische
+Testkurve aufgedeckt hat.
+
+Der Durchgang dauert etwa 25 Minuten. Kürzer geht kaum: Jeder Abschnitt muss
+die Erkennungskonstante überdauern, die er passieren soll - kürzer würde die
+Regeln nicht testen, sondern brechen.
+
 ### Gegen die eigene Maschine testen
 
 Synthetische Kurven belegen nur, dass der Code tut, wofür er geschrieben

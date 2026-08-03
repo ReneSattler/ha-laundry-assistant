@@ -244,6 +244,30 @@ detection pipeline and prints the resulting phase timelines;
 totals, kW-reporting sensors, a too-coarse update interval, and a brief
 burst that must not be recorded as a run.
 
+### Running a simulated cycle in that instance
+
+`tools/simulation/` drives a full wash cycle through the running instance,
+so the integration is exercised end to end - config entry, entity creation,
+the card being served - rather than only its logic. No login needed.
+
+```bash
+docker compose up -d          # once, then complete onboarding in the browser
+docker compose stop
+cp tools/simulation/*.yaml .docker-config/
+python tools/simulation/seed_config_entry.py .docker-config
+docker compose up -d
+docker compose logs -f | grep laundry_sim
+```
+
+An `input_number` stands in for the plug. That is deliberate: it changes
+value only when the automation sets it, which is exactly how a plug
+configured with `PowerDelta` behaves - and that case broke the integration
+once already, in a way no synthetic test curve had caught.
+
+The cycle takes about 25 minutes. It cannot be compressed much further:
+every stretch has to outlast the detection constant it clears, and shrinking
+them below that would not test the rules, it would break them.
+
 ### Testing against your own appliance
 
 Synthetic curves only prove the code does what it was written to do. To find
