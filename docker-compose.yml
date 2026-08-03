@@ -18,6 +18,10 @@ services:
       # Instance config, kept out of git - safe to delete for a clean slate.
       - ./.docker-config:/config
       - ./custom_components/laundry_assistant:/config/custom_components/laundry_assistant:ro
+      # The repository itself, so the replay harness under tools/ can be run
+      # inside the container where homeassistant is importable:
+      #   docker compose exec homeassistant python /repo/tools/replay_cycles.py
+      - .:/repo:ro
     ports:
       - "8123:8123"
     environment:

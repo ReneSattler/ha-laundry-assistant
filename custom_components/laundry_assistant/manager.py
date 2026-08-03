@@ -368,7 +368,11 @@ class LaundryApplianceManager:
         if phase == self.phase:
             return
 
-        if self._phase_since is not None:
+        # The run opens in "idle" for the moment between the run being
+        # recognised and the first phase being decided. That is bookkeeping,
+        # not a phase the appliance was ever in - keep it out of the
+        # timeline the card draws.
+        if self._phase_since is not None and self.phase != PHASE_IDLE:
             self.phase_timeline.append(
                 {
                     "phase": self.phase,

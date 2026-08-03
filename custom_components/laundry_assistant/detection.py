@@ -33,9 +33,18 @@ from .const import (
     THRESHOLD_KEYS,
 )
 
-# A "medium" stretch shorter than this is a drain pulse; longer, and it is
-# the spin cycle spinning up. The two are indistinguishable by wattage alone.
-DRAIN_MAX_SECONDS = 90
+# While washing, the drum reverses in bursts of a few seconds and the power
+# jumps into "medium" each time. Those bursts are not a drain, so leaving the
+# wash phase requires "medium" to hold longer than any single burst.
+WASH_BURST_MAX_SECONDS = 45
+# A "medium" stretch that holds beyond this is no longer a drain pulse - it
+# is the spin spinning up. The two are indistinguishable by wattage alone.
+DRAIN_MAX_SECONDS = 120
+# Machines spin between rinses, not only at the end. Dropping back to "low"
+# for this long means the spin was an intermediate one and washing continues.
+# Long enough that the run-down at the end of the final spin does not trip
+# it before the run-end detection closes the run.
+SPIN_EXIT_SECONDS = 180
 # Rhythmic low/medium alternation counts as washing once this many band
 # changes have been seen without leaving the low/medium range.
 WASH_ALTERNATIONS = 2
@@ -93,8 +102,10 @@ def next_phase_washer(phase: str, ctx: PhaseContext) -> tuple[str, float]:
 
     # Heating is the least ambiguous signal a washing machine produces:
     # nothing else in the cycle draws two kilowatts, and it holds flat for
-    # minutes. Whenever it appears, it wins regardless of the current phase.
-    if band == BAND_HIGH:
+    # minutes. The one exception is a spin already under way - a fast final
+    # spin on a machine with a low high-edge can reach into the band, and
+    # calling that "heating" would be plainly wrong.
+    if band == BAND_HIGH and phase != PHASE_SPINNING:
         return PHASE_HEATING, CONFIDENCE_CLEAR
 
     if phase in (PHASE_IDLE, PHASE_INTAKE):
@@ -114,12 +125,17 @@ def next_phase_washer(phase: str, ctx: PhaseContext) -> tuple[str, float]:
         return PHASE_WASHING, CONFIDENCE_UNCERTAIN
 
     if phase == PHASE_WASHING:
-        if band == BAND_MEDIUM:
-            # Still ambiguous at this point: a drain pulse and the start of
-            # a spin look the same. Report draining, and let the dwell time
-            # below promote it to spinning if it keeps going.
+        # Every drum reversal briefly pushes the draw into "medium". Only a
+        # stretch that outlasts such a burst is something else - and even
+        # then it is still ambiguous, because a drain pulse and a spin
+        # ramping up look identical. Report draining, and let the dwell
+        # time below promote it to spinning if it keeps going.
+        if band == BAND_MEDIUM and ctx.band_dwell_seconds >= WASH_BURST_MAX_SECONDS:
             return PHASE_DRAINING, CONFIDENCE_UNCERTAIN
-        return PHASE_WASHING, CONFIDENCE_CLEAR if ctx.alternations >= WASH_ALTERNATIONS else CONFIDENCE_LIKELY
+        confidence = (
+            CONFIDENCE_CLEAR if ctx.alternations >= WASH_ALTERNATIONS else CONFIDENCE_LIKELY
+        )
+        return PHASE_WASHING, confidence
 
     if phase == PHASE_DRAINING:
         if band == BAND_MEDIUM and ctx.band_dwell_seconds >= DRAIN_MAX_SECONDS:
@@ -133,9 +149,19 @@ def next_phase_washer(phase: str, ctx: PhaseContext) -> tuple[str, float]:
         return PHASE_DRAINING, CONFIDENCE_UNCERTAIN
 
     if phase == PHASE_SPINNING:
-        if band in (BAND_MEDIUM, BAND_LOW):
-            return PHASE_SPINNING, CONFIDENCE_CLEAR
-        return PHASE_SPINNING, CONFIDENCE_LIKELY
+        # Machines spin between rinses too, and without a way back the
+        # phase would stick for the rest of the cycle.
+        #
+        # The way back cannot be "low held for a while": during a wash the
+        # band alternates every few tens of seconds and never holds long
+        # enough, so that condition could not fire in the one situation it
+        # exists for. What separates the two is the alternation itself - a
+        # spin holds a steady draw, a tumbling drum does not.
+        if ctx.alternations >= WASH_ALTERNATIONS:
+            return PHASE_WASHING, CONFIDENCE_LIKELY
+        if band == BAND_LOW and ctx.band_dwell_seconds >= SPIN_EXIT_SECONDS:
+            return PHASE_WASHING, CONFIDENCE_LIKELY
+        return PHASE_SPINNING, CONFIDENCE_CLEAR
 
     return PHASE_RUNNING, CONFIDENCE_UNCERTAIN
 
@@ -152,10 +178,9 @@ def next_phase_dryer(phase: str, ctx: PhaseContext) -> tuple[str, float]:
     """
     band = ctx.band
 
-    if band == BAND_HIGH:
-        return PHASE_HEATING, CONFIDENCE_CLEAR
-
     if phase in (PHASE_IDLE, PHASE_HEATING):
+        if band == BAND_HIGH:
+            return PHASE_HEATING, CONFIDENCE_CLEAR
         if band == BAND_MEDIUM:
             return PHASE_DRYING, CONFIDENCE_CLEAR
         if band == BAND_LOW:
@@ -167,17 +192,21 @@ def next_phase_dryer(phase: str, ctx: PhaseContext) -> tuple[str, float]:
         return PHASE_DRYING, CONFIDENCE_UNCERTAIN
 
     if phase == PHASE_DRYING:
-        if band == BAND_MEDIUM:
+        # A condenser dryer switches its heating element on and off
+        # throughout the whole cycle, crossing in and out of the high band
+        # dozens of times. That is what drying looks like on that machine -
+        # treating each crossing as a new heating phase would turn the
+        # timeline into noise. Only the warm-up before drying starts is
+        # reported as heating.
+        if band in (BAND_HIGH, BAND_MEDIUM):
             return PHASE_DRYING, CONFIDENCE_CLEAR
         if band == BAND_LOW and ctx.band_dwell_seconds >= COOLDOWN_MIN_SECONDS:
             return PHASE_COOLDOWN, CONFIDENCE_CLEAR
-        if band == BAND_LOW:
-            # Could still be a momentary dip between compressor cycles.
-            return PHASE_DRYING, CONFIDENCE_UNCERTAIN
-        return PHASE_DRYING, CONFIDENCE_LIKELY
+        # Could still be a momentary dip between compressor cycles.
+        return PHASE_DRYING, CONFIDENCE_UNCERTAIN
 
     if phase == PHASE_COOLDOWN:
-        if band == BAND_MEDIUM:
+        if band in (BAND_MEDIUM, BAND_HIGH):
             # Heat came back on - it was a dip, not the end.
             return PHASE_DRYING, CONFIDENCE_LIKELY
         return PHASE_COOLDOWN, CONFIDENCE_CLEAR

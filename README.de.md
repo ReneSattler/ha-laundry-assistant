@@ -7,11 +7,14 @@ Leistungsmessung ablesbar macht, was Waschmaschine oder Trockner gerade
 tatsächlich tun - in welcher Phase sie stecken, wie lange es noch dauert und
 was der Durchgang gekostet hat.
 
-> **Status: noch nicht an echter Hardware geprüft.** Die Integration ist
-> vollständig implementiert, wurde aber noch nie gegen eine echte
-> Waschmaschine oder einen echten Trockner laufen gelassen, und die
-> Erkennungsregeln sind nicht an aufgezeichneten Leistungskurven validiert.
-> Das ist ein erster Entwurf, kein Release.
+> **Status: gegen synthetische Kurven geprüft, nicht an echter Hardware.**
+> Erkennungsregeln, Lauferfassung, Energieintegration, Restzeitschätzung und
+> Kalibrierung wurden in einem Home-Assistant-Container mit dem
+> Replay-Werkzeug unter `tools/` durchgespielt - dabei kamen drei echte
+> Fehler in den Übergangsregeln heraus, die behoben sind. Was *nicht*
+> stattgefunden hat: ein Lauf an einer echten Waschmaschine oder einem
+> echten Trockner, und die Lovelace-Karten wurden noch nicht im Browser
+> gerendert.
 
 ## Warum
 
@@ -190,6 +193,20 @@ aus dem Container nicht erreichbar sind, legt man dort einen
 `input_number`-Helfer an und richtet die Integration darauf aus, um einen
 Durchgang von Hand durchzuspielen. Siehe
 [Issue #13](https://github.com/ReneSattler/ha-laundry-assistant/issues/13).
+
+Das Repository ist zusätzlich unter `/repo` eingehängt, sodass das
+Replay-Werkzeug ohne diese Einrichtung direkt gegen die echte
+Manager-Klasse laufen kann:
+
+```bash
+docker compose exec homeassistant python /repo/tools/replay_cycles.py
+```
+
+`replay_cycles.py` schickt synthetische Wasch- und Trocknerkurven durch die
+Erkennung und gibt die entstehenden Phasen-Zeitleisten aus;
+`replay_behaviour.py` deckt Restzeit-Lernen, Kalibrierung, Wochensummen,
+kW-Sensoren, ein zu grobes Update-Intervall und einen kurzen Stromstoß ab,
+der nicht als Lauf gezählt werden darf.
 
 ## Lizenz
 

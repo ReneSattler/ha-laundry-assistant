@@ -7,11 +7,13 @@ a detailed view of what your washing machine or tumble dryer is actually
 doing - which phase it is in, how much longer it will run, and what the
 cycle cost.
 
-> **Status: not yet verified against real hardware.** The integration is
-> feature-complete and its logic is written, but it has not been run against
-> an actual washing machine or dryer, and the detection rules have not been
-> validated on recorded power curves. Treat this as a first draft, not a
-> release.
+> **Status: verified against synthetic curves, not against real hardware.**
+> The detection rules, run tracking, energy integration, remaining-time
+> estimation and calibration have been exercised in a Home Assistant
+> container using the replay harness under `tools/` - which found and fixed
+> three real bugs in the transition rules. What has *not* happened is a run
+> against an actual washing machine or dryer, and the Lovelace cards have
+> not been rendered in a browser yet.
 
 ## Why
 
@@ -180,6 +182,19 @@ Home Assistant then runs on <http://localhost:8123>. Since the real
 appliances are not reachable from that container, create an `input_number`
 helper and point the integration at it to drive a cycle by hand. See
 [issue #13](https://github.com/ReneSattler/ha-laundry-assistant/issues/13).
+
+The repository is also mounted at `/repo`, so the replay harness can be run
+against the real manager class without any of that setup:
+
+```bash
+docker compose exec homeassistant python /repo/tools/replay_cycles.py
+```
+
+`replay_cycles.py` feeds synthetic washer and dryer curves through the
+detection pipeline and prints the resulting phase timelines;
+`replay_behaviour.py` covers remaining-time learning, calibration, weekly
+totals, kW-reporting sensors, a too-coarse update interval, and a brief
+burst that must not be recorded as a run.
 
 ## License
 
