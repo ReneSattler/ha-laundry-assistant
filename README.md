@@ -254,10 +254,18 @@ the card being served - rather than only its logic. No login needed.
 docker compose up -d          # once, then complete onboarding in the browser
 docker compose stop
 cp tools/simulation/*.yaml .docker-config/
-python tools/simulation/seed_config_entry.py .docker-config
+python tools/simulation/seed_config_entry.py .docker-config --type washer
+python tools/simulation/seed_config_entry.py .docker-config --type dryer
 docker compose up -d
 docker compose logs -f | grep laundry_sim
 ```
+
+Both appliances run at once, on separate helpers. The dryer cycle is
+modelled on a condenser machine rather than a heat pump on purpose: its
+heating element switches on and off throughout the programme, crossing in
+and out of the high band a dozen times. That behaviour once produced twenty
+alternating heating/drying segments in a single cycle, so it is the case
+worth driving through a live instance.
 
 An `input_number` stands in for the plug. That is deliberate: it changes
 value only when the automation sets it, which is exactly how a plug

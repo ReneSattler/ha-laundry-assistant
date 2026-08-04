@@ -88,5 +88,197 @@
         "name": "Sonne deckt einen Durchgang"
       }
     }
+  },
+  "services": {
+    "set_price": {
+      "name": "Preis setzen",
+      "description": "Setzt den Strompreis, mit dem ein Durchgang bewertet wird.",
+      "fields": {
+        "entry_id": {
+          "name": "Gerät",
+          "description": "Die entry_id des Geräts, aus den Attributen des Phasen-Sensors."
+        },
+        "price_per_kwh": {
+          "name": "Preis pro kWh",
+          "description": "Was eine Kilowattstunde kostet."
+        },
+        "currency": {
+          "name": "Währung",
+          "description": "Währungszeichen neben den Kosten, z. B. EUR."
+        }
+      }
+    },
+    "set_reminder": {
+      "name": "Erinnerung einstellen",
+      "description": "Stellt die Erinnerung für Wäsche ein, die in der Trommel liegen bleibt.",
+      "fields": {
+        "entry_id": {
+          "name": "Gerät",
+          "description": "Die entry_id des Geräts, aus den Attributen des Phasen-Sensors."
+        },
+        "enabled": {
+          "name": "Aktiv",
+          "description": "Ob überhaupt erinnert wird."
+        },
+        "delay_minutes": {
+          "name": "Verzögerung",
+          "description": "Minuten nach Ende des Durchgangs bis zur ersten Erinnerung."
+        },
+        "repeat_minutes": {
+          "name": "Wiederholabstand",
+          "description": "Minuten zwischen den Wiederholungen."
+        },
+        "max_repeats": {
+          "name": "Höchstzahl",
+          "description": "Wie oft erinnert wird, bevor es aufhört."
+        }
+      }
+    },
+    "set_notify_target": {
+      "name": "Benachrichtigungsziel setzen",
+      "description": "Wählt, welcher Notify-Dienst Erinnerungen und Warnungen erhält.",
+      "fields": {
+        "entry_id": {
+          "name": "Gerät",
+          "description": "Die entry_id des Geräts, aus den Attributen des Phasen-Sensors."
+        },
+        "target": {
+          "name": "Ziel",
+          "description": "Name des Notify-Dienstes, z. B. mobile_app_mein_handy. Leer lassen, um Benachrichtigungen abzuschalten."
+        }
+      }
+    },
+    "set_thresholds": {
+      "name": "Bandgrenzen setzen",
+      "description": "Setzt die Grenzen der Leistungsbänder in Watt. Sie müssen von Standby bis Hoch streng steigen.",
+      "fields": {
+        "entry_id": {
+          "name": "Gerät",
+          "description": "Die entry_id des Geräts, aus den Attributen des Phasen-Sensors."
+        },
+        "thresholds": {
+          "name": "Schwellwerte",
+          "description": "Die vier Grenzen, z. B. {\"standby\": 2, \"low\": 20, \"medium\": 150, \"high\": 800}."
+        }
+      }
+    },
+    "start_calibration": {
+      "name": "Kalibrierung starten",
+      "description": "Zeichnet die nächsten kompletten Läufe auf und schlägt daraus Bandgrenzen vor. Die Erkennung arbeitet währenddessen mit den bisherigen Werten weiter.",
+      "fields": {
+        "entry_id": {
+          "name": "Gerät",
+          "description": "Die entry_id des Geräts, aus den Attributen des Phasen-Sensors."
+        }
+      }
+    },
+    "cancel_calibration": {
+      "name": "Kalibrierung abbrechen",
+      "description": "Beendet die Aufzeichnung und verwirft die gesammelten Messwerte.",
+      "fields": {
+        "entry_id": {
+          "name": "Gerät",
+          "description": "Die entry_id des Geräts, aus den Attributen des Phasen-Sensors."
+        }
+      }
+    },
+    "apply_calibration": {
+      "name": "Kalibrierung übernehmen",
+      "description": "Übernimmt die vorgeschlagenen Schwellwerte. Schlägt fehl, wenn noch kein Vorschlag vorliegt.",
+      "fields": {
+        "entry_id": {
+          "name": "Gerät",
+          "description": "Die entry_id des Geräts, aus den Attributen des Phasen-Sensors."
+        }
+      }
+    },
+    "dismiss_reminder": {
+      "name": "Erinnerung verwerfen",
+      "description": "Bricht eine laufende Erinnerung für liegen gebliebene Wäsche ab.",
+      "fields": {
+        "entry_id": {
+          "name": "Gerät",
+          "description": "Die entry_id des Geräts, aus den Attributen des Phasen-Sensors."
+        }
+      }
+    },
+    "clear_history": {
+      "name": "Verlauf löschen",
+      "description": "Löscht alle gespeicherten Läufe. Die Restzeitschätzung muss danach neu lernen, und die Wochensummen beginnen wieder bei null.",
+      "fields": {
+        "entry_id": {
+          "name": "Gerät",
+          "description": "Die entry_id des Geräts, aus den Attributen des Phasen-Sensors."
+        }
+      }
+    },
+    "set_anomaly_detection": {
+      "name": "Abweichungs-Warnungen einstellen",
+      "description": "Vergleicht jeden abgeschlossenen Lauf mit dem Verlauf des Geräts und legt fest, wie weit eine Phase abweichen darf, bevor gemeldet wird.",
+      "fields": {
+        "entry_id": {
+          "name": "Gerät",
+          "description": "Die entry_id des Geräts, aus den Attributen des Phasen-Sensors."
+        },
+        "enabled": {
+          "name": "Aktiv",
+          "description": "Ob abgeschlossene Läufe mit dem Verlauf verglichen werden."
+        },
+        "factor": {
+          "name": "Faktor",
+          "description": "Um welchen Faktor eine Phase von ihrer üblichen Dauer abweichen darf, bevor gemeldet wird."
+        }
+      }
+    },
+    "dismiss_anomalies": {
+      "name": "Abweichungs-Warnungen verwerfen",
+      "description": "Löscht die Befunde des letzten Laufs.",
+      "fields": {
+        "entry_id": {
+          "name": "Gerät",
+          "description": "Die entry_id des Geräts, aus den Attributen des Phasen-Sensors."
+        }
+      }
+    },
+    "set_program_name": {
+      "name": "Programm benennen",
+      "description": "Gibt einem erkannten Programm einen Namen, z. B. \"Buntwäsche 60\".",
+      "fields": {
+        "entry_id": {
+          "name": "Gerät",
+          "description": "Die entry_id des Geräts, aus den Attributen des Phasen-Sensors."
+        },
+        "program_id": {
+          "name": "Programm",
+          "description": "Die Programm-ID aus dem Attribut \"programs\" des Phasen-Sensors."
+        },
+        "name": {
+          "name": "Name",
+          "description": "Wie es heißen soll."
+        }
+      }
+    },
+    "set_solar": {
+      "name": "PV-Überschuss-Quellen setzen",
+      "description": "Verweist das Gerät auf einen Sensor für die PV-Erzeugung und optional einen für den Hausverbrauch, damit es erkennt, wann ein Durchgang aus Überschuss liefe.",
+      "fields": {
+        "entry_id": {
+          "name": "Gerät",
+          "description": "Die entry_id des Geräts, aus den Attributen des Phasen-Sensors."
+        },
+        "solar_entity": {
+          "name": "PV-Erzeugung",
+          "description": "Sensor mit der aktuellen PV-Erzeugung. Leer lassen, um den Vorschlag abzuschalten."
+        },
+        "consumption_entity": {
+          "name": "Hausverbrauch",
+          "description": "Sensor mit dem aktuellen Hausverbrauch, damit der Überschuss berechnet werden kann."
+        },
+        "feed_in_tariff": {
+          "name": "Einspeisevergütung",
+          "description": "Was eine eingespeiste Kilowattstunde einbringt. Die Ersparnis ist die Differenz zum bezahlten Preis."
+        }
+      }
+    }
   }
 }

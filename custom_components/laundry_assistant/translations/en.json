@@ -88,5 +88,197 @@
         "name": "Solar covers a cycle"
       }
     }
+  },
+  "services": {
+    "set_price": {
+      "name": "Set price",
+      "description": "Sets the electricity price used to cost a cycle.",
+      "fields": {
+        "entry_id": {
+          "name": "Appliance",
+          "description": "The entry_id of the appliance, from the phase sensor's attributes."
+        },
+        "price_per_kwh": {
+          "name": "Price per kWh",
+          "description": "What one kilowatt hour costs."
+        },
+        "currency": {
+          "name": "Currency",
+          "description": "Currency symbol shown next to the cost, e.g. EUR."
+        }
+      }
+    },
+    "set_reminder": {
+      "name": "Set reminder",
+      "description": "Configures the reminder for laundry left in the drum.",
+      "fields": {
+        "entry_id": {
+          "name": "Appliance",
+          "description": "The entry_id of the appliance, from the phase sensor's attributes."
+        },
+        "enabled": {
+          "name": "Enabled",
+          "description": "Whether to remind at all."
+        },
+        "delay_minutes": {
+          "name": "Delay",
+          "description": "Minutes after the cycle ends before the first reminder."
+        },
+        "repeat_minutes": {
+          "name": "Repeat interval",
+          "description": "Minutes between repeats."
+        },
+        "max_repeats": {
+          "name": "Maximum repeats",
+          "description": "How often to remind before giving up."
+        }
+      }
+    },
+    "set_notify_target": {
+      "name": "Set notification target",
+      "description": "Chooses which notify service receives reminders and warnings.",
+      "fields": {
+        "entry_id": {
+          "name": "Appliance",
+          "description": "The entry_id of the appliance, from the phase sensor's attributes."
+        },
+        "target": {
+          "name": "Target",
+          "description": "Name of the notify service, e.g. mobile_app_my_phone. Leave empty to switch notifications off."
+        }
+      }
+    },
+    "set_thresholds": {
+      "name": "Set band thresholds",
+      "description": "Sets the power band edges in watts. They must increase strictly from standby to high.",
+      "fields": {
+        "entry_id": {
+          "name": "Appliance",
+          "description": "The entry_id of the appliance, from the phase sensor's attributes."
+        },
+        "thresholds": {
+          "name": "Thresholds",
+          "description": "The four edges, e.g. {\"standby\": 2, \"low\": 20, \"medium\": 150, \"high\": 800}."
+        }
+      }
+    },
+    "start_calibration": {
+      "name": "Start calibration",
+      "description": "Records the next few complete runs and proposes band thresholds from them. Detection keeps using the current thresholds meanwhile.",
+      "fields": {
+        "entry_id": {
+          "name": "Appliance",
+          "description": "The entry_id of the appliance, from the phase sensor's attributes."
+        }
+      }
+    },
+    "cancel_calibration": {
+      "name": "Cancel calibration",
+      "description": "Stops recording and discards the collected samples.",
+      "fields": {
+        "entry_id": {
+          "name": "Appliance",
+          "description": "The entry_id of the appliance, from the phase sensor's attributes."
+        }
+      }
+    },
+    "apply_calibration": {
+      "name": "Apply calibration",
+      "description": "Adopts the proposed thresholds. Fails if no proposal is ready.",
+      "fields": {
+        "entry_id": {
+          "name": "Appliance",
+          "description": "The entry_id of the appliance, from the phase sensor's attributes."
+        }
+      }
+    },
+    "dismiss_reminder": {
+      "name": "Dismiss reminder",
+      "description": "Cancels a pending reminder for laundry left in the drum.",
+      "fields": {
+        "entry_id": {
+          "name": "Appliance",
+          "description": "The entry_id of the appliance, from the phase sensor's attributes."
+        }
+      }
+    },
+    "clear_history": {
+      "name": "Clear history",
+      "description": "Deletes all stored runs. The remaining-time estimate has to relearn afterwards, and the weekly totals restart at zero.",
+      "fields": {
+        "entry_id": {
+          "name": "Appliance",
+          "description": "The entry_id of the appliance, from the phase sensor's attributes."
+        }
+      }
+    },
+    "set_anomaly_detection": {
+      "name": "Set deviation warnings",
+      "description": "Enables comparing each finished run against the appliance's history, and sets how far a phase may stray before it is reported.",
+      "fields": {
+        "entry_id": {
+          "name": "Appliance",
+          "description": "The entry_id of the appliance, from the phase sensor's attributes."
+        },
+        "enabled": {
+          "name": "Enabled",
+          "description": "Whether to compare finished runs against the history."
+        },
+        "factor": {
+          "name": "Factor",
+          "description": "How many times its usual duration a phase may take before it is reported."
+        }
+      }
+    },
+    "dismiss_anomalies": {
+      "name": "Dismiss deviation warnings",
+      "description": "Clears the findings from the last run.",
+      "fields": {
+        "entry_id": {
+          "name": "Appliance",
+          "description": "The entry_id of the appliance, from the phase sensor's attributes."
+        }
+      }
+    },
+    "set_program_name": {
+      "name": "Name a program",
+      "description": "Gives a recognised program a name, e.g. \"Cotton 60\".",
+      "fields": {
+        "entry_id": {
+          "name": "Appliance",
+          "description": "The entry_id of the appliance, from the phase sensor's attributes."
+        },
+        "program_id": {
+          "name": "Program",
+          "description": "The program id, listed in the phase sensor's \"programs\" attribute."
+        },
+        "name": {
+          "name": "Name",
+          "description": "What to call it."
+        }
+      }
+    },
+    "set_solar": {
+      "name": "Set solar surplus sources",
+      "description": "Points the appliance at a solar production sensor and, optionally, a house consumption sensor, so it can tell when a cycle would run on surplus.",
+      "fields": {
+        "entry_id": {
+          "name": "Appliance",
+          "description": "The entry_id of the appliance, from the phase sensor's attributes."
+        },
+        "solar_entity": {
+          "name": "Solar production",
+          "description": "Sensor reporting current solar production. Leave empty to switch the suggestion off."
+        },
+        "consumption_entity": {
+          "name": "House consumption",
+          "description": "Sensor reporting what the house is drawing, so surplus can be worked out."
+        },
+        "feed_in_tariff": {
+          "name": "Feed-in tariff",
+          "description": "What one exported kilowatt hour earns. The saving is the difference to the price paid."
+        }
+      }
+    }
   }
 }

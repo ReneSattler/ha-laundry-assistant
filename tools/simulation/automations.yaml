@@ -97,3 +97,94 @@
           energy={{ (state_attr('sensor.sim_washer_phase', 'last_run') or {}).get('energy_kwh') }} kWh
           cost={{ (state_attr('sensor.sim_washer_phase', 'last_run') or {}).get('cost') }}
           timeline={{ (state_attr('sensor.sim_washer_phase', 'last_run') or {}).get('timeline') }}
+
+# --------------------------------------------------------------------------- #
+# Tumble dryer
+# --------------------------------------------------------------------------- #
+
+- id: laundry_sim_dryer_trace
+  alias: "Laundry sim - trace dryer phase changes"
+  mode: queued
+  max: 50
+  triggers:
+    - trigger: state
+      entity_id: sensor.sim_dryer_phase
+  conditions: []
+  actions:
+    - action: system_log.write
+      data:
+        level: warning
+        logger: laundry_sim
+        message: >-
+          DRYER {{ trigger.from_state.state if trigger.from_state else '?' }}
+          -> {{ trigger.to_state.state }}
+          | {{ state_attr('sensor.sim_dryer_phase', 'watts') }} W
+          | band {{ state_attr('sensor.sim_dryer_phase', 'band') }}
+          | confidence {{ state_attr('sensor.sim_dryer_phase', 'confidence') }}
+          | elapsed {{ state_attr('sensor.sim_dryer_phase', 'elapsed_seconds') }} s
+          | energy {{ state_attr('sensor.sim_dryer_phase', 'cycle_energy_kwh') }} kWh
+
+- id: laundry_sim_dryer_cycle
+  alias: "Laundry sim - drive a drying cycle"
+  description: >-
+    A condenser dryer rather than a heat-pump one, deliberately: its heating
+    element switches on and off throughout the whole programme, crossing in
+    and out of the high band over and over. That behaviour once produced
+    twenty alternating heating/drying segments in a single cycle, so it is
+    the case worth driving through a live instance.
+  mode: single
+  triggers:
+    - trigger: homeassistant
+      event: start
+  conditions: []
+  actions:
+    - action: system_log.write
+      data:
+        level: warning
+        logger: laundry_sim
+        message: "SIM starting a drying cycle"
+
+    - action: input_number.set_value
+      target: {entity_id: input_number.fake_dryer_power}
+      data: {value: 0.5}
+    - delay: "00:01:00"
+
+    # Warm-up: the only stretch that should be reported as heating
+    - action: input_number.set_value
+      target: {entity_id: input_number.fake_dryer_power}
+      data: {value: 2200}
+    - delay: "00:02:00"
+
+    # Drying: the element cycling. Still drying, not six heating phases.
+    - repeat:
+        count: 6
+        sequence:
+          - action: input_number.set_value
+            target: {entity_id: input_number.fake_dryer_power}
+            data: {value: 900}
+          - delay: "00:00:45"
+          - action: input_number.set_value
+            target: {entity_id: input_number.fake_dryer_power}
+            data: {value: 2200}
+          - delay: "00:00:45"
+
+    # Cool-down: only the drum still turning
+    - action: input_number.set_value
+      target: {entity_id: input_number.fake_dryer_power}
+      data: {value: 140}
+    - delay: "00:03:00"
+
+    - action: input_number.set_value
+      target: {entity_id: input_number.fake_dryer_power}
+      data: {value: 0.4}
+    - delay: "00:06:00"
+
+    - action: system_log.write
+      data:
+        level: warning
+        logger: laundry_sim
+        message: >-
+          SIM dryer finished. phase={{ states('sensor.sim_dryer_phase') }}
+          duration={{ (state_attr('sensor.sim_dryer_phase', 'last_run') or {}).get('duration_seconds') }} s
+          energy={{ (state_attr('sensor.sim_dryer_phase', 'last_run') or {}).get('energy_kwh') }} kWh
+          timeline={{ (state_attr('sensor.sim_dryer_phase', 'last_run') or {}).get('timeline') }}

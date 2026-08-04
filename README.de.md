@@ -268,10 +268,18 @@ Logik. Ohne Anmeldung.
 docker compose up -d          # einmal, dann im Browser das Onboarding durchklicken
 docker compose stop
 cp tools/simulation/*.yaml .docker-config/
-python tools/simulation/seed_config_entry.py .docker-config
+python tools/simulation/seed_config_entry.py .docker-config --type washer
+python tools/simulation/seed_config_entry.py .docker-config --type dryer
 docker compose up -d
 docker compose logs -f | grep laundry_sim
 ```
+
+Beide Geräte laufen gleichzeitig, auf getrennten Helfern. Der Trockner ist
+bewusst als Kondenstrockner modelliert und nicht als Wärmepumpentrockner:
+Sein Heizstab taktet über das ganze Programm und kreuzt ein Dutzend Mal in
+das Band `high` und wieder heraus. Genau dieses Verhalten hat einmal zwanzig
+abwechselnde Heizen/Trocknen-Segmente in einem einzigen Durchgang erzeugt -
+also der Fall, den man durch eine echte Instanz schicken will.
 
 Ein `input_number` steht stellvertretend für die Steckdose. Das ist Absicht:
 Er ändert seinen Wert nur, wenn die Automatisierung ihn setzt - genau so
