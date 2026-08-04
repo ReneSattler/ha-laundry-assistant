@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.1.0 - 2026-08-04
 
-First implementation pass. Written without a running Home Assistant
-instance - syntax checked only, not verified against real appliances.
+First release. Verified in a Home Assistant container, against synthetic
+power curves and a driven cycle - **not yet against a real washing machine
+or tumble dryer**. Marked as a pre-release for that reason.
 
 - Band classification and the phase state machine for washing machines and
   tumble dryers (`detection.py`), kept free of Home Assistant imports so a
