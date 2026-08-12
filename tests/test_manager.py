@@ -186,3 +186,56 @@ class TestCalibration:
         assert manager.calibration_runs == 1
         assert manager.calibration_state == "recording"
         assert manager.calibration_proposal is None
+
+
+class TestRunSplitting:
+    """A cycle with long internal pauses must stay one run.
+
+    Reported from a live installation: a boil wash was recorded as two or
+    three separate runs, which made the calibration count them as separate
+    cycles. Splitting is worse than closing late - it poisons the history
+    that remaining time, calibration and the weekly totals all learn from.
+    """
+
+    def test_a_boil_wash_with_soak_pauses_stays_one_run(self):
+        from .curves import BOIL_WASH_WITH_SOAK
+
+        manager = make_manager("washer")
+        feed(manager, BOIL_WASH_WITH_SOAK)
+
+        assert len(manager.runs) == 1, (
+            f"the cycle was split into {len(manager.runs)} runs"
+        )
+        run = manager.runs[0]
+        # The curve runs 95 minutes from the first intake to the end of the
+        # spin. A split would show up as a much shorter first run.
+        assert 90 < run["duration_seconds"] / 60 < 100
+        assert PHASE_SPINNING in [entry["phase"] for entry in run["timeline"]]
+
+    def test_a_cycle_closes_promptly_once_it_has_spun(self):
+        """Patience is only for cycles that have not reached their end yet.
+
+        Waiting the long threshold after every cycle would delay the
+        finished reminder by twenty minutes for no reason.
+        """
+        from custom_components.laundry_assistant.const import (
+            RUN_END_PATIENT_SECONDS,
+            RUN_END_SECONDS,
+        )
+
+        manager = make_manager("washer")
+        feed(manager, WASHER_CYCLE)
+        run = manager.runs[0]
+        # WASHER_CYCLE ends with 8 minutes of standby. Closing only after
+        # the patient threshold would push the recorded duration past it.
+        quiet_tail = run["duration_seconds"] - (3 + 22 + 35 + 1 + 11) * 60
+        assert quiet_tail < RUN_END_PATIENT_SECONDS
+        assert quiet_tail <= RUN_END_SECONDS + 60
+
+    def test_calibration_counts_a_boil_wash_once(self):
+        from .curves import BOIL_WASH_WITH_SOAK
+
+        manager = make_manager("washer")
+        manager.calibration_state = "recording"
+        feed(manager, BOIL_WASH_WITH_SOAK)
+        assert manager.calibration_runs == 1

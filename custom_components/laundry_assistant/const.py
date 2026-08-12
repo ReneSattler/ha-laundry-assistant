@@ -134,11 +134,37 @@ CONFIDENCE_UNCERTAIN = 0.4
 # considered started - keeps a brief door-light or control-panel wake-up from
 # opening a run.
 RUN_START_SECONDS = 60
-# ... and must stay at or below "standby" for this long before it ends. Has
-# to outlast the longest legitimate quiet stretch inside a cycle (soaking,
-# the pause between wash and spin), otherwise a single run is reported as
-# several short ones.
+# ... and must stay at or below "standby" for this long before it ends.
+#
+# Two thresholds, not one. A single four-minute rule split a real boil wash
+# into three "runs": that programme has quiet stretches longer than four
+# minutes - soaking, and the pause between the main wash and the spin - and
+# during them a washing machine draws no more than its control panel does.
+#
+# Splitting a cycle is far more damaging than closing one late. It poisons
+# the run history, so the remaining-time estimate learns from fragments;
+# it miscounts calibration runs; and it inflates the weekly cycle count.
+# Closing late only delays the "finished" reminder.
+#
+# So: be patient until the appliance has done the thing it does last - the
+# spin on a washing machine, the cool-down on a dryer. Once that has been
+# seen, the cycle really is over and there is no reason to wait.
 RUN_END_SECONDS = 240
+RUN_END_PATIENT_SECONDS = 1200
+
+# Patience is only extended to runs that have been going long enough to
+# plausibly be a real cycle. Without this, a two-minute burst from a door
+# light would leave the card showing "water intake" for twenty minutes -
+# a worse outcome than the splitting this is meant to prevent. A real
+# programme has been running for half an hour before its first long soak.
+RUN_PATIENCE_MIN_ELAPSED_SECONDS = 600
+
+# The phase that, once seen, means the programme has reached its end. Used
+# only to decide how long to wait before closing a run.
+TERMINAL_PHASE_BY_TYPE = {
+    APPLIANCE_TYPE_WASHER: PHASE_SPINNING,
+    APPLIANCE_TYPE_DRYER: PHASE_COOLDOWN,
+}
 
 # Samples buffered per run. At one sample every few seconds a long cotton
 # program still fits; older samples are dropped from the front.

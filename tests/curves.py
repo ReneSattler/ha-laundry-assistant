@@ -138,3 +138,22 @@ CONDENSER_DRYER_CYCLE = [
     (10, 140),
     (8, 0.5),
 ]
+
+
+# A boil wash, the programme that first exposed run splitting on real
+# hardware. Its distinguishing feature is not the temperature but the
+# pauses: soaking after the main wash, and again before the spin. During
+# those the machine draws no more than its control panel does, for far
+# longer than a rinse-and-spin programme ever pauses.
+BOIL_WASH_WITH_SOAK = [
+    (5, 0.5),
+    (3, 50),
+    (30, 2200),                      # heating to 95 degrees takes a while
+    (20, alternating(60, 190, 3)),   # main wash
+    (8, 1.0),                        # soaking - quiet, but not finished
+    (15, alternating(60, 190, 3)),   # rinse
+    (6, 1.0),                        # quiet again before the spin
+    (1, 350),                        # drain
+    (12, 540),                       # spin
+    (10, 0.5),
+]

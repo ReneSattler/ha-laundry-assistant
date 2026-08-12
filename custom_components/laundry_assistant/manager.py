@@ -58,8 +58,11 @@ from .const import (
     PROGRAM_MIN_RUNS,
     PROGRAM_TOLERANCE,
     REMINDER_MESSAGES_BY_LANGUAGE,
+    RUN_END_PATIENT_SECONDS,
+    RUN_PATIENCE_MIN_ELAPSED_SECONDS,
     RUN_END_SECONDS,
     RUN_START_SECONDS,
+    TERMINAL_PHASE_BY_TYPE,
     SOLAR_SURPLUS_DWELL_SECONDS,
     SOLAR_SURPLUS_MARGIN,
     STORAGE_KEY_PREFIX,
@@ -421,11 +424,41 @@ class LaundryApplianceManager:
                 self._start_run(self._above_low_since)
             return
 
-        if (
-            self._below_standby_since is not None
-            and (when - self._below_standby_since).total_seconds() >= RUN_END_SECONDS
-        ):
+        quiet_for = (
+            (when - self._below_standby_since).total_seconds()
+            if self._below_standby_since is not None
+            else 0.0
+        )
+        if self._below_standby_since is not None and quiet_for >= self._run_end_threshold:
             self._finish_run(self._below_standby_since)
+
+    @property
+    def _run_end_threshold(self) -> int:
+        """How long the appliance must stay quiet before the run is closed.
+
+        Short once the programme has reached the phase it ends on, long
+        before that. A boil wash goes quiet for well over four minutes while
+        soaking, and treating those pauses as the end of the cycle chopped a
+        single wash into three runs - which then poisons the history the
+        remaining-time estimate and the calibration both learn from.
+        """
+        terminal = TERMINAL_PHASE_BY_TYPE.get(self.appliance_type)
+        if terminal is None:
+            return RUN_END_SECONDS
+
+        seen = {entry["phase"] for entry in self.phase_timeline} | {self.phase}
+        if terminal in seen:
+            return RUN_END_SECONDS
+
+        # Nothing that has only been running a couple of minutes has earned
+        # the benefit of the doubt: a burst from a door light would
+        # otherwise sit on the card as "water intake" for twenty minutes.
+        if self.run_started is not None:
+            elapsed = (self._last_sample_at or self.run_started) - self.run_started
+            if elapsed.total_seconds() < RUN_PATIENCE_MIN_ELAPSED_SECONDS:
+                return RUN_END_SECONDS
+
+        return RUN_END_PATIENT_SECONDS
 
     def _start_run(self, started: datetime) -> None:
         self.run_started = started
