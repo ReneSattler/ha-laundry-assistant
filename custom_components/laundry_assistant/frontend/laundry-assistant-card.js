@@ -218,10 +218,113 @@ class LaundryBaseCard extends HTMLElement {
     this._rendered = false;
   }
 
+  /* Rendering replaces the card's entire DOM, which destroys whatever the
+   * user was focused on. The phase sensor updates on every power reading -
+   * several times a minute while an appliance runs - so without a guard,
+   * editing any field during a cycle means losing focus mid-keystroke, over
+   * and over. On Android that also dismisses the keyboard each time.
+   *
+   * Two independent brakes, because neither is sufficient alone:
+   *
+   *   _isEditingField()  blocks while a field genuinely holds focus
+   *   _suppressRender    blocks from the first touch until shortly after
+   *                      the resulting service call has come back
+   *
+   * The second exists because the moment a native control opens its own UI
+   * (a number keypad, a select dialog) the underlying element can lose DOM
+   * focus, so the focus check alone would let a render through at exactly
+   * the wrong moment.
+   */
+  connectedCallback() {
+    if (this._guardsAttached) return;
+    this._guardsAttached = true;
+
+    // Delegated, and bound to the host element rather than its children:
+    // _render() replaces innerHTML wholesale, so anything bound to a child
+    // would be thrown away on the first update. The host survives.
+    const startSuppression = (event) => {
+      if (event.target.closest?.("input, select, textarea")) {
+        this._suppressRender = true;
+        this._scheduleRenderResume(60000);
+      }
+    };
+    // pointerdown covers mouse, touch and pen anywhere standards-compliant.
+    // touchstart and focusin are redundant fallbacks: some embedded
+    // WebViews - the Home Assistant Companion App on Android among them -
+    // do not reliably dispatch pointer events for native form controls.
+    // "input" is the last resort, because a range slider's thumb drag has
+    // its own built-in gesture handling and may dispatch none of the other
+    // three, yet every live-updating label beside a slider already relies
+    // on "input" firing during the drag.
+    this.addEventListener("pointerdown", startSuppression);
+    this.addEventListener("touchstart", startSuppression, { passive: true });
+    this.addEventListener("focusin", startSuppression);
+    this.addEventListener("input", startSuppression);
+  }
+
+  disconnectedCallback() {
+    clearTimeout(this._suppressRenderTimeout);
+  }
+
+  /** Whether a field the user could still be part-way through editing holds
+   * focus.
+   *
+   * Checkboxes, selects and range sliders are deliberately excluded: those
+   * are one-shot interactions - once toggled, chosen or dragged there is
+   * nothing left to be part-way through - but they commonly keep DOM focus
+   * afterwards. Counting them as "editing" would block the render that is
+   * supposed to show the result, so a toggled switch would not reveal its
+   * dependent section until focus happened to move elsewhere.
+   *
+   * Uses document.activeElement rather than a shadow root's: this card
+   * renders into the light DOM. The containment check matters - without it
+   * a field in a completely different card would freeze this one.
+   */
+  _isEditingField() {
+    const active = document.activeElement;
+    if (!active || !this.contains(active)) return false;
+    if (active.tagName === "TEXTAREA") return true;
+    if (active.tagName === "INPUT") return !["checkbox", "range"].includes(active.type);
+    return false;
+  }
+
+  /** Lifts suppression after delayMs and forces one fresh render, unless a
+   * field still holds focus - the hass setter keeps blocking those. */
+  _scheduleRenderResume(delayMs) {
+    clearTimeout(this._suppressRenderTimeout);
+    this._suppressRenderTimeout = setTimeout(() => {
+      this._suppressRender = false;
+      if (!this._isEditingField()) this._render();
+    }, delayMs);
+  }
+
+  /** Lifts suppression once a service call has actually come back.
+   *
+   * Re-rendering the instant "change" fires would rebuild the card from
+   * attributes that have not caught up with the edit yet, so the value
+   * visibly snaps back to its old number for a moment. Waiting for the
+   * round trip avoids that. The 8 s timer is a safety net for a call that
+   * never settles; without it the card would stay frozen.
+   */
+  _releaseRenderSuppression(pendingCall) {
+    clearTimeout(this._suppressRenderTimeout);
+    if (!pendingCall || typeof pendingCall.then !== "function") {
+      this._scheduleRenderResume(1000);
+      return;
+    }
+    this._suppressRenderTimeout = setTimeout(() => this._scheduleRenderResume(0), 8000);
+    pendingCall.then(
+      () => this._scheduleRenderResume(400),
+      () => this._scheduleRenderResume(400)
+    );
+  }
+
   set hass(hass) {
     this._hass = hass;
     activeLocale = lang(hass);
-    this._render();
+    if (!this._suppressRender && !this._isEditingField()) {
+      this._render();
+    }
   }
 
   get _stateObj() {
@@ -239,10 +342,14 @@ class LaundryBaseCard extends HTMLElement {
 
   _callService(service, extra) {
     if (!this._entryId) return Promise.resolve();
-    return this._hass.callService(DOMAIN, service, {
+    const pending = this._hass.callService(DOMAIN, service, {
       entry_id: this._entryId,
       ...(extra || {}),
     });
+    // Every settings control commits through here, so this is the one place
+    // that has to know when it is safe to rebuild the DOM again.
+    this._releaseRenderSuppression(pending);
+    return pending;
   }
 
   _shellStyles() {
@@ -893,6 +1000,12 @@ class LaundryCardEditorBase extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     activeLocale = lang(hass);
+    // Same problem as the cards: rebuilding the DOM while the appliance
+    // dropdown is open closes it. There is only one control here and it is
+    // a select, so a plain focus check is enough - no suppression machinery
+    // needed, because a select commits in a single interaction.
+    const active = document.activeElement;
+    if (active && this.contains(active)) return;
     this._render();
   }
 
