@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.3.0 - 2026-08-21
+
+Three features, all suggested by what a live installation's data showed
+was missing.
+
+### Added
+
+- **The wash tells you the dryer is free.** A washing machine and a tumble
+  dryer set up in the same integration knew nothing about each other. The
+  finished reminder now carries a note when a dryer is configured and
+  idle. Opt-in, silent when no dryer exists, and silent when it is
+  mid-cycle - "your wash is done and the dryer is busy" is noise. It is a
+  suffix on the existing reminder rather than a second notification: being
+  told twice about one load of washing is how a useful feature becomes one
+  people switch off.
+- **An expected-finish-time sensor**, with `device_class: timestamp`.
+  Derived from the run's start plus its estimated total rather than from
+  now plus the remaining time - arithmetically the same at any instant,
+  but this one only moves when the estimate does, while the other shifts
+  with every reading. A minute count is what you want on a card; an
+  instant is what composes into an automation or a spoken sentence.
+- **Energy per programme over time.** Each recognised programme keeps its
+  run energies and reports which way they are moving. The existing
+  deviation warnings compare one run against the median of comparable
+  ones, so they catch a step change and miss a slow drift - a boil wash
+  creeping from 1.9 to 2.4 kWh over months is a scaling heating element,
+  and no single cycle shows it. Reported only above six runs, and shown as
+  "steady" below five percent, because a figure that wobbles between one
+  percent up and one percent down teaches the reader to ignore the line.
+
+
 ## 0.2.0 - 2026-08-21
 
 Everything here came out of reading a live installation's data - a washing

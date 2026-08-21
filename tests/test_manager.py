@@ -381,3 +381,85 @@ class TestPowerSourceStatus:
         manager = make_manager("washer")
         manager.hass.states.get = lambda entity_id: FakeState(120)
         assert manager.power_source_status == "ok"
+
+
+class TestFinishesAt:
+    def test_unknown_while_nothing_runs(self):
+        manager = make_manager("washer")
+        assert manager.finishes_at is None
+
+    def test_holds_still_between_readings(self):
+        """The point of a timestamp over a minute count: it must not move
+        every time a reading lands, or history becomes a staircase and an
+        automation reads a value that is already stale."""
+        manager = make_manager("washer")
+        when = dt_util.utcnow() - timedelta(hours=12)
+        for _ in range(3):
+            when = feed(manager, WASHER_CYCLE, start=when) + timedelta(minutes=20)
+
+        partial = [(5, 0.5), (3, 50), (22, 2000)]
+        elapsed = sum(minutes for minutes, _ in partial)
+        end = feed(manager, partial, start=dt_util.utcnow() - timedelta(minutes=elapsed))
+
+        first = manager.finishes_at
+        assert first is not None
+        # A few more readings that do not change the estimate.
+        feed(manager, [(1, alternating(60, 180, 3))], start=end)
+        assert manager.finishes_at == first
+
+    def test_matches_start_plus_the_estimate(self):
+        manager = make_manager("washer")
+        when = dt_util.utcnow() - timedelta(hours=12)
+        for _ in range(3):
+            when = feed(manager, WASHER_CYCLE, start=when) + timedelta(minutes=20)
+        partial = [(5, 0.5), (3, 50), (20, 2000)]
+        elapsed = sum(minutes for minutes, _ in partial)
+        feed(manager, partial, start=dt_util.utcnow() - timedelta(minutes=elapsed))
+
+        expected = manager.run_started + timedelta(seconds=manager.estimated_total_seconds)
+        assert manager.finishes_at == expected
+
+
+class TestDryerChaining:
+    def _pair(self):
+        from unittest.mock import MagicMock
+
+        from custom_components.laundry_assistant.const import DOMAIN
+        from custom_components.laundry_assistant.manager import LaundryApplianceManager
+
+        hass = MagicMock()
+        hass.async_create_task = lambda coro: coro.close()
+        hass.config.language = "de"
+        washer = LaundryApplianceManager(hass, "w", "Waschmaschine", "sensor.w", "washer", None)
+        dryer = LaundryApplianceManager(hass, "d", "Trockner", "sensor.d", "dryer", None)
+        hass.data = {DOMAIN: {"w": washer, "d": dryer}}
+        return washer, dryer
+
+    def test_nothing_is_said_when_no_dryer_is_configured(self):
+        manager = make_manager("washer")
+        manager.hass.data = {}
+        assert manager.dryer_available is None
+        assert manager._dryer_suffix("de") == ""
+
+    def test_an_idle_dryer_is_mentioned(self):
+        washer, _dryer = self._pair()
+        washer.chain_to_dryer = True
+        assert washer.dryer_available is True
+        assert "Trockner" in washer._dryer_suffix("de")
+
+    def test_a_busy_dryer_is_not_mentioned(self):
+        """"Your wash is done and the dryer is busy" is noise."""
+        washer, dryer = self._pair()
+        washer.chain_to_dryer = True
+        dryer.run_started = dt_util.utcnow()
+        assert washer.dryer_available is False
+        assert washer._dryer_suffix("de") == ""
+
+    def test_silent_while_the_option_is_off(self):
+        washer, _dryer = self._pair()
+        assert washer.chain_to_dryer is False
+        assert washer._dryer_suffix("de") == ""
+
+    def test_a_dryer_never_chains_to_itself(self):
+        _washer, dryer = self._pair()
+        assert dryer.dryer_available is None

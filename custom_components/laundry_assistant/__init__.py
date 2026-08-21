@@ -42,6 +42,7 @@ from .const import (
     SERVICE_DISMISS_ANOMALIES,
     SERVICE_DISMISS_REMINDER,
     SERVICE_SET_ANOMALY_DETECTION,
+    SERVICE_SET_CHAIN_TO_DRYER,
     SERVICE_SET_NOTIFY_TARGET,
     SERVICE_SET_PROGRAM_NAME,
     SERVICE_SET_SOLAR,
@@ -100,6 +101,12 @@ SET_SOLAR_SCHEMA = vol.Schema(
         vol.Optional("solar_entity"): vol.Any(cv.entity_id, None),
         vol.Optional("consumption_entity"): vol.Any(cv.entity_id, None),
         vol.Optional("feed_in_tariff"): vol.All(vol.Coerce(float), vol.Range(min=0, max=10)),
+    }
+)
+SET_CHAIN_TO_DRYER_SCHEMA = vol.Schema(
+    {
+        vol.Required("entry_id"): cv.string,
+        vol.Required("enabled"): cv.boolean,
     }
 )
 SET_THRESHOLDS_SCHEMA = vol.Schema(
@@ -269,6 +276,10 @@ def _async_register_services(hass: HomeAssistant) -> None:
         manager = _get_manager(hass, call.data["entry_id"])
         await manager.async_set_notify_target(call.data.get("target"))
 
+    async def handle_set_chain_to_dryer(call: ServiceCall) -> None:
+        manager = _get_manager(hass, call.data["entry_id"])
+        await manager.async_set_chain_to_dryer(call.data["enabled"])
+
     async def handle_set_thresholds(call: ServiceCall) -> None:
         manager = _get_manager(hass, call.data["entry_id"])
         try:
@@ -340,6 +351,12 @@ def _async_register_services(hass: HomeAssistant) -> None:
     )
     hass.services.async_register(
         DOMAIN, SERVICE_SET_THRESHOLDS, handle_set_thresholds, schema=SET_THRESHOLDS_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_CHAIN_TO_DRYER,
+        handle_set_chain_to_dryer,
+        schema=SET_CHAIN_TO_DRYER_SCHEMA,
     )
     hass.services.async_register(
         DOMAIN, SERVICE_START_CALIBRATION, handle_start_calibration, schema=ENTRY_ID_ONLY_SCHEMA

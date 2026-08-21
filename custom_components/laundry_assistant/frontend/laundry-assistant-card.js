@@ -82,6 +82,10 @@ const STRINGS = {
     unnamedProgram: "Unnamed",
     runsSuffix: "runs",
     save: "Save",
+    chainToDryer: "Mention the dryer when the wash is done",
+    trendRising: "using {percent}% more than it used to",
+    trendFalling: "using {percent}% less than it used to",
+    trendSteady: "steady",
   },
   de: {
     idle: "Bereit",
@@ -148,6 +152,10 @@ const STRINGS = {
     unnamedProgram: "Unbenannt",
     runsSuffix: "Läufe",
     save: "Speichern",
+    chainToDryer: "Trockner erwähnen, wenn die Wäsche fertig ist",
+    trendRising: "verbraucht {percent}% mehr als früher",
+    trendFalling: "verbraucht {percent}% weniger als früher",
+    trendSteady: "unverändert",
   },
 };
 
@@ -718,6 +726,24 @@ class LaundrySettingsCard extends LaundryBaseCard {
       .sort();
   }
 
+  /** How a programme's consumption is moving, if it has run often enough
+   * to say. Below a few percent nothing is shown at all: a number that
+   * wobbles between "1% more" and "1% less" every cycle teaches the reader
+   * to ignore the line entirely. */
+  _trendLabel(program) {
+    const trend = program.energy_trend;
+    if (trend === null || trend === undefined) return "";
+    const percent = Math.round(Math.abs(trend - 1) * 100);
+    if (percent < 5) {
+      return ` &middot; ${escapeHtml(t(this._hass, "trendSteady"))}`;
+    }
+    const key = trend > 1 ? "trendRising" : "trendFalling";
+    const color = trend > 1 ? "var(--warning-color)" : "var(--success-color)";
+    return ` &middot; <span style="color:${color}">${escapeHtml(
+      t(this._hass, key, { percent })
+    )}</span>`;
+  }
+
   _renderPrograms() {
     const programs = this._attrs.programs || [];
     if (!programs.length) return "";
@@ -732,7 +758,7 @@ class LaundrySettingsCard extends LaundryBaseCard {
           <span style="font-size:12px;color:var(--secondary-text-color);white-space:nowrap">
             ${formatDuration(program.duration_seconds)} &middot; ${program.runs} ${escapeHtml(
               t(this._hass, "runsSuffix")
-            )}
+            )}${this._trendLabel(program)}
           </span>
         </div>`
       )
@@ -859,6 +885,16 @@ class LaundrySettingsCard extends LaundryBaseCard {
           )}</span>
         </div>
 
+        ${
+          a.appliance_type === "washer" && a.dryer_available !== null
+            ? `<div class="row">
+          <div class="grow">${escapeHtml(t(this._hass, "chainToDryer"))}</div>
+          <ha-switch data-field="chain-to-dryer"${
+            a.chain_to_dryer ? " checked" : ""
+          }></ha-switch>
+        </div>`
+            : ""
+        }
         <div class="row">
           <div class="grow">${escapeHtml(t(this._hass, "notifyTarget"))}</div>
           <select class="pick" data-field="notify">${options}</select>
@@ -952,6 +988,13 @@ class LaundrySettingsCard extends LaundryBaseCard {
         pushReminder(toggle.checked)
       );
     });
+
+    const chain = this.querySelector('[data-field="chain-to-dryer"]');
+    if (chain) {
+      chain.addEventListener("change", (ev) =>
+        this._callService("set_chain_to_dryer", { enabled: ev.target.checked })
+      );
+    }
 
     const notify = this.querySelector('[data-field="notify"]');
     notify.addEventListener("change", () =>

@@ -35,6 +35,7 @@ from .const import (
     PHASE_RUNNING,
     PHASE_SPINNING,
     PHASE_WASHING,
+    PROGRAM_ENERGY_HISTORY,
     THRESHOLD_KEYS,
 )
 
@@ -409,6 +410,27 @@ def match_program(
     return None
 
 
+def energy_trend(energies: list[float]) -> float | None:
+    """How the programme's consumption is moving, as a ratio.
+
+    The mean of the newer half over the mean of the older half: 1.0 is
+    flat, 1.2 means it now draws a fifth more than it used to. Returns
+    None below six runs, where the halves are too small for the answer to
+    mean anything and a confident number would be worse than silence.
+
+    A ratio rather than a slope so it reads the same for a 0.3 kWh quick
+    wash and a 2.4 kWh boil wash.
+    """
+    if len(energies) < 6:
+        return None
+    half = len(energies) // 2
+    older = statistics.mean(energies[:half])
+    newer = statistics.mean(energies[half:])
+    if older <= 0:
+        return None
+    return round(newer / older, 3)
+
+
 def summarise_program(runs: list[dict[str, Any]]) -> dict[str, Any]:
     """Collapse the runs of one program into a representative shape."""
     phases = [phase for phase, _ in program_key(runs[0])]
@@ -427,8 +449,14 @@ def summarise_program(runs: list[dict[str, Any]]) -> dict[str, Any]:
         }
         for phase in dict.fromkeys(phases)
     ]
+    energies = [run["energy_kwh"] for run in runs]
     return {
         "timeline": timeline,
+        # Every run's energy, oldest first. The series is what makes a slow
+        # drift visible - a boil wash creeping from 1.9 to 2.4 kWh over
+        # months is a scaling heating element, and no single cycle shows it.
+        "energy_history": [round(value, 4) for value in energies[-PROGRAM_ENERGY_HISTORY:]],
+        "energy_trend": energy_trend(energies),
         "duration_seconds": round(
             statistics.median(run["duration_seconds"] for run in runs), 1
         ),

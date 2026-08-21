@@ -57,6 +57,8 @@ from .const import (
     ATTR_RUN_ACTIVE,
     ATTR_RUN_STARTED,
     ATTR_THRESHOLDS,
+    ATTR_CHAIN_TO_DRYER,
+    ATTR_DRYER_AVAILABLE,
     ATTR_POWER_SOURCE_STATUS,
     ATTR_UPDATE_INTERVAL_OK,
     ATTR_UPDATE_INTERVAL_SECONDS,
@@ -84,6 +86,7 @@ async def async_setup_entry(
             LaundryWeekEnergySensor(manager, entry),
             LaundryWeekCostSensor(manager, entry),
             LaundryTotalEnergySensor(manager, entry),
+            LaundryFinishesAtSensor(manager, entry),
         ]
     )
 
@@ -179,6 +182,8 @@ class LaundryPhaseSensor(LaundryBaseSensor):
             ATTR_UPDATE_INTERVAL_SECONDS: manager.update_interval_seconds,
             ATTR_UPDATE_INTERVAL_OK: manager.update_interval_ok,
             ATTR_POWER_SOURCE_STATUS: manager.power_source_status,
+            ATTR_CHAIN_TO_DRYER: manager.chain_to_dryer,
+            ATTR_DRYER_AVAILABLE: manager.dryer_available,
             ATTR_REMINDER_ENABLED: manager.reminder_enabled,
             ATTR_REMINDER_DELAY_MINUTES: manager.reminder_delay_minutes,
             ATTR_REMINDER_REPEAT_MINUTES: manager.reminder_repeat_minutes,
@@ -223,6 +228,27 @@ class LaundryRemainingSensor(LaundryBaseSensor):
             return None
         remaining = self._manager.remaining_seconds
         return None if remaining is None else remaining // 60
+
+
+class LaundryFinishesAtSensor(LaundryBaseSensor):
+    """When the cycle in progress is expected to end.
+
+    A companion to the remaining-minutes sensor rather than a replacement:
+    a count of minutes is what you want on a card, an instant is what you
+    want in an automation or a spoken sentence. This one also holds still
+    between readings, because it is derived from the run's start rather
+    than from the current moment.
+    """
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:clock-end"
+
+    def __init__(self, manager: LaundryApplianceManager, entry: ConfigEntry) -> None:
+        super().__init__(manager, entry, "finishes_at")
+
+    @property
+    def native_value(self):
+        return self._manager.finishes_at
 
 
 class LaundryCycleEnergySensor(LaundryBaseSensor):

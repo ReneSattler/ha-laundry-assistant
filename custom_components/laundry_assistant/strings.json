@@ -81,6 +81,9 @@
       },
       "total_energy": {
         "name": "Total energy"
+      },
+      "finishes_at": {
+        "name": "Finishes at"
       }
     },
     "binary_sensor": {
@@ -277,6 +280,20 @@
         "feed_in_tariff": {
           "name": "Feed-in tariff",
           "description": "What one exported kilowatt hour earns. The saving is the difference to the price paid."
+        }
+      }
+    },
+    "set_chain_to_dryer": {
+      "name": "Chain to the dryer",
+      "description": "Adds a note to the finished reminder when a dryer set up in this integration is free.",
+      "fields": {
+        "entry_id": {
+          "name": "Appliance",
+          "description": "The entry_id of the appliance, from the phase sensor's attributes."
+        },
+        "enabled": {
+          "name": "Enabled",
+          "description": "Whether to mention the dryer."
         }
       }
     }

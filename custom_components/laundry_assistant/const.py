@@ -202,6 +202,10 @@ UNUSABLE_UPDATE_INTERVAL_SECONDS = 120
 # plug leaves behind; "unavailable" is a plug that has dropped off the
 # network. Both used to be silent, and an appliance pointed at a dead
 # entity is indistinguishable from one nobody has used.
+# Per-programme energy figures retained, oldest dropped first. Enough to
+# see a drift over months without turning the stored state into a log.
+PROGRAM_ENERGY_HISTORY = 30
+
 POWER_SOURCE_OK = "ok"
 POWER_SOURCE_MISSING = "missing"
 POWER_SOURCE_UNAVAILABLE = "unavailable"
@@ -321,12 +325,25 @@ REMINDER_MESSAGES_BY_LANGUAGE = {
     },
 }
 
+# Appended to the reminder when a dryer is set up in the same integration
+# and is not itself running. Deliberately a suffix rather than a second
+# notification: the reminder already interrupts the user once, and telling
+# them twice about one load of washing is how a useful feature becomes one
+# people switch off.
+DRYER_FREE_MESSAGE_BY_LANGUAGE = {
+    "en": " The dryer is free.",
+    "de": " Der Trockner ist frei.",
+}
+
+DEFAULT_CHAIN_TO_DRYER = False
+
 # --------------------------------------------------------------------------- #
 # Services
 # --------------------------------------------------------------------------- #
 
 SERVICE_SET_PRICE = "set_price"
 SERVICE_SET_REMINDER = "set_reminder"
+SERVICE_SET_CHAIN_TO_DRYER = "set_chain_to_dryer"
 SERVICE_SET_NOTIFY_TARGET = "set_notify_target"
 SERVICE_SET_THRESHOLDS = "set_thresholds"
 SERVICE_START_CALIBRATION = "start_calibration"
@@ -379,6 +396,8 @@ ATTR_REMINDER_DELAY_MINUTES = "reminder_delay_minutes"
 ATTR_REMINDER_REPEAT_MINUTES = "reminder_repeat_minutes"
 ATTR_REMINDER_MAX_REPEATS = "reminder_max_repeats"
 ATTR_REMINDER_PENDING = "reminder_pending"
+ATTR_CHAIN_TO_DRYER = "chain_to_dryer"
+ATTR_DRYER_AVAILABLE = "dryer_available"
 ATTR_NOTIFY_TARGET = "notify_target"
 ATTR_ANOMALIES = "anomalies"
 # The same findings rendered as sentences in the instance language, so the

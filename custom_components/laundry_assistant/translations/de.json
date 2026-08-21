@@ -81,6 +81,9 @@
       },
       "total_energy": {
         "name": "Gesamtenergie"
+      },
+      "finishes_at": {
+        "name": "Fertig um"
       }
     },
     "binary_sensor": {
@@ -277,6 +280,20 @@
         "feed_in_tariff": {
           "name": "Einspeisevergütung",
           "description": "Was eine eingespeiste Kilowattstunde einbringt. Die Ersparnis ist die Differenz zum bezahlten Preis."
+        }
+      }
+    },
+    "set_chain_to_dryer": {
+      "name": "Mit dem Trockner verketten",
+      "description": "Ergänzt die Fertig-Erinnerung um einen Hinweis, wenn ein in dieser Integration eingerichteter Trockner frei ist.",
+      "fields": {
+        "entry_id": {
+          "name": "Gerät",
+          "description": "Die entry_id des Geräts, aus den Attributen des Phasen-Sensors."
+        },
+        "enabled": {
+          "name": "Aktiv",
+          "description": "Ob der Trockner erwähnt wird."
         }
       }
     }

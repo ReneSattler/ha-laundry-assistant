@@ -23,9 +23,13 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    DOMAIN,
     ANOMALY_MESSAGES_BY_LANGUAGE,
     ANOMALY_MIN_RUNS,
+    APPLIANCE_TYPE_DRYER,
     APPLIANCE_TYPE_WASHER,
+    DEFAULT_CHAIN_TO_DRYER,
+    DRYER_FREE_MESSAGE_BY_LANGUAGE,
     BAND_DWELL_SECONDS,
     BAND_LOW,
     BAND_MEDIUM,
@@ -124,6 +128,7 @@ class LaundryApplianceManager:
         self.reminder_repeat_minutes: int = DEFAULT_REMINDER_REPEAT_MINUTES
         self.reminder_max_repeats: int = DEFAULT_REMINDER_MAX_REPEATS
         self.notify_target: str | None = None
+        self.chain_to_dryer: bool = DEFAULT_CHAIN_TO_DRYER
 
         # Live state
         self.phase: str = PHASE_IDLE
@@ -209,6 +214,7 @@ class LaundryApplianceManager:
                 "reminder_max_repeats", DEFAULT_REMINDER_MAX_REPEATS
             )
             self.notify_target = data.get("notify_target")
+            self.chain_to_dryer = data.get("chain_to_dryer", DEFAULT_CHAIN_TO_DRYER)
             self.anomaly_detection_enabled = data.get(
                 "anomaly_detection_enabled", DEFAULT_ANOMALY_DETECTION_ENABLED
             )
@@ -286,6 +292,7 @@ class LaundryApplianceManager:
                 "reminder_repeat_minutes": self.reminder_repeat_minutes,
                 "reminder_max_repeats": self.reminder_max_repeats,
                 "notify_target": self.notify_target,
+                "chain_to_dryer": self.chain_to_dryer,
                 "anomaly_detection_enabled": self.anomaly_detection_enabled,
                 "anomaly_factor": self.anomaly_factor,
                 "last_anomalies": self.last_anomalies,
@@ -669,6 +676,22 @@ class LaundryApplianceManager:
         return int(statistics.median(matching))
 
     @property
+    def finishes_at(self) -> datetime | None:
+        """When the run in progress is expected to end.
+
+        Deliberately the run's start plus its estimated total, rather than
+        now plus the remaining time. The two are arithmetically the same at
+        any instant, but this one only moves when the estimate itself does,
+        while the other would shift with every reading - which in history
+        is a staircase, and in an automation is a value that has already
+        changed by the time a message is composed.
+        """
+        total = self.estimated_total_seconds
+        if self.run_started is None or total is None:
+            return None
+        return self.run_started + timedelta(seconds=total)
+
+    @property
     def remaining_seconds(self) -> int | None:
         total = self.estimated_total_seconds
         if total is None:
@@ -848,7 +871,8 @@ class LaundryApplianceManager:
                 self.notify_target,
                 {
                     "title": texts["title"].format(appliance=self.name),
-                    "message": texts["message"].format(minutes=minutes),
+                    "message": texts["message"].format(minutes=minutes)
+                    + self._dryer_suffix(lang),
                 },
                 blocking=False,
             )
@@ -863,6 +887,34 @@ class LaundryApplianceManager:
         else:
             self._arm_reminder(self.reminder_repeat_minutes, finished)
         self._notify_listeners()
+
+    @property
+    def dryer_available(self) -> bool | None:
+        """Whether a dryer in this integration is set up and idle.
+
+        None when there is no dryer at all, which is different from one
+        that is busy: nothing should be said in the first case, and
+        "the dryer is busy" is noise in the second.
+        """
+        if self.appliance_type != APPLIANCE_TYPE_WASHER:
+            return None
+        others = [
+            manager
+            for manager in self.hass.data.get(DOMAIN, {}).values()
+            if isinstance(manager, LaundryApplianceManager)
+            and manager is not self
+            and manager.appliance_type == APPLIANCE_TYPE_DRYER
+        ]
+        if not others:
+            return None
+        return any(not manager.run_active for manager in others)
+
+    def _dryer_suffix(self, lang: str) -> str:
+        if not self.chain_to_dryer or self.dryer_available is not True:
+            return ""
+        return DRYER_FREE_MESSAGE_BY_LANGUAGE.get(
+            lang, DRYER_FREE_MESSAGE_BY_LANGUAGE["en"]
+        )
 
     def _cancel_reminder(self, keep_pending: bool = False) -> None:
         if self._reminder_unsub is not None:
@@ -1173,6 +1225,11 @@ class LaundryApplianceManager:
             self.reminder_max_repeats = max_repeats
         if not enabled:
             self._cancel_reminder()
+        await self._async_save()
+        self._notify_listeners()
+
+    async def async_set_chain_to_dryer(self, enabled: bool) -> None:
+        self.chain_to_dryer = enabled
         await self._async_save()
         self._notify_listeners()
 

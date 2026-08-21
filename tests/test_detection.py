@@ -194,3 +194,27 @@ class TestThresholds:
         proposal = propose_thresholds(samples, APPLIANCE_TYPE_DRYER)
         assert proposal is not None
         assert classify(700.0, proposal) == BAND_MEDIUM
+
+
+class TestEnergyTrend:
+    def test_silent_below_six_runs(self):
+        """Two runs against three is not evidence of anything."""
+        from custom_components.laundry_assistant.detection import energy_trend
+
+        assert energy_trend([1.0, 1.0, 2.0, 2.0]) is None
+
+    def test_a_rising_series_is_reported(self):
+        from custom_components.laundry_assistant.detection import energy_trend
+
+        # A boil wash creeping up as the heating element scales.
+        assert energy_trend([1.9, 1.9, 2.0, 2.3, 2.4, 2.4]) > 1.1
+
+    def test_a_flat_series_reads_as_one(self):
+        from custom_components.laundry_assistant.detection import energy_trend
+
+        assert energy_trend([2.0] * 8) == 1.0
+
+    def test_a_falling_series_is_reported(self):
+        from custom_components.laundry_assistant.detection import energy_trend
+
+        assert energy_trend([2.4, 2.4, 2.3, 1.9, 1.9, 1.9]) < 0.95
