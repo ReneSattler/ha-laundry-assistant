@@ -86,6 +86,12 @@ const STRINGS = {
     trendRising: "using {percent}% more than it used to",
     trendFalling: "using {percent}% less than it used to",
     trendSteady: "steady",
+    progWarm: "Warm wash",
+    progCold: "Cold wash",
+    progShort: "Quick programme",
+    progDry: "Drying programme",
+    progLongDry: "Long drying programme",
+    programsHint: "Recognised on their own. Naming one is optional.",
   },
   de: {
     idle: "Bereit",
@@ -156,6 +162,12 @@ const STRINGS = {
     trendRising: "verbraucht {percent}% mehr als früher",
     trendFalling: "verbraucht {percent}% weniger als früher",
     trendSteady: "unverändert",
+    progWarm: "Warmwäsche",
+    progCold: "Kaltwäsche",
+    progShort: "Kurzprogramm",
+    progDry: "Trockenprogramm",
+    progLongDry: "Langes Trockenprogramm",
+    programsHint: "Werden von selbst erkannt. Benennen ist optional.",
   },
 };
 
@@ -744,22 +756,46 @@ class LaundrySettingsCard extends LaundryBaseCard {
     )}</span>`;
   }
 
+  /** A readable description of a programme, derived from its own shape.
+   *
+   * Programmes are recognised, matched and used for the remaining-time
+   * estimate without anyone naming them - but a list of entries reading
+   * "Unnamed" with an empty box next to it looks like a form waiting to be
+   * filled in. Deriving a label makes the automatic thing look automatic.
+   * A name the user typed always wins.
+   */
+  _derivedLabel(program) {
+    const minutes = (program.duration_seconds || 0) / 60;
+    const timeline = program.timeline || [];
+    const isDryer = this._attrs.appliance_type === "dryer";
+
+    if (isDryer) {
+      return t(this._hass, minutes > 90 ? "progLongDry" : "progDry");
+    }
+    if (minutes < 45) return t(this._hass, "progShort");
+    const heated = timeline.some(
+      (entry) => entry.phase === "heating" && entry.seconds > 60
+    );
+    return t(this._hass, heated ? "progWarm" : "progCold");
+  }
+
   _renderPrograms() {
     const programs = this._attrs.programs || [];
     if (!programs.length) return "";
     const rows = programs
       .map(
         (program) => `
-        <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
-          <input class="num" style="flex:1;text-align:left" type="text"
+        <div style="margin-top:10px">
+          <input class="num" style="width:100%;box-sizing:border-box;text-align:left"
+                 type="text"
                  data-program="${escapeHtml(program.id)}"
-                 placeholder="${escapeHtml(t(this._hass, "unnamedProgram"))}"
+                 placeholder="${escapeHtml(this._derivedLabel(program))}"
                  value="${escapeHtml(program.name || "")}">
-          <span style="font-size:12px;color:var(--secondary-text-color);white-space:nowrap">
+          <div style="font-size:12px;color:var(--secondary-text-color);margin-top:3px">
             ${formatDuration(program.duration_seconds)} &middot; ${program.runs} ${escapeHtml(
               t(this._hass, "runsSuffix")
             )}${this._trendLabel(program)}
-          </span>
+          </div>
         </div>`
       )
       .join("");
@@ -767,6 +803,7 @@ class LaundrySettingsCard extends LaundryBaseCard {
     return `
       <div class="row" style="flex-direction:column;align-items:stretch">
         <div style="font-size:14px">${escapeHtml(t(this._hass, "programs"))}</div>
+        <div style="font-size:12px;color:var(--secondary-text-color);margin-top:2px">${escapeHtml(t(this._hass, "programsHint"))}</div>
         ${rows}
       </div>`;
   }

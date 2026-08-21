@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.3.1 - 2026-08-21
+
+### Changed
+
+- **Recognised programmes name themselves.** They were always recognised,
+  matched and used for the remaining-time estimate without anyone doing
+  anything - but a list reading "Unnamed" beside an empty text box looks
+  like a form waiting to be filled in, so the automatic thing did not look
+  automatic. Each programme now shows a label derived from its own shape -
+  a warm wash, a cold wash, a quick programme, a long drying programme -
+  and the section says outright that naming is optional. A name typed by
+  hand still wins.
+
+### Fixed
+
+- The programme name field was squeezed to a few characters by the trend
+  text beside it, which made the one thing it is for - renaming - awkward.
+  It now has a line of its own.
+
+
 ## 0.3.0 - 2026-08-21
 
 Three features, all suggested by what a live installation's data showed
