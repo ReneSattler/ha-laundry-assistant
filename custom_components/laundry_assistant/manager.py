@@ -51,6 +51,9 @@ from .const import (
     MAX_STORED_RUNS,
     MAX_USABLE_UPDATE_INTERVAL_SECONDS,
     UNUSABLE_UPDATE_INTERVAL_SECONDS,
+    POWER_SOURCE_MISSING,
+    POWER_SOURCE_OK,
+    POWER_SOURCE_UNAVAILABLE,
     MIN_SAMPLES_FOR_INTERVAL_CHECK,
     PHASE_FINISHED,
     PHASE_IDLE,
@@ -249,9 +252,18 @@ class LaundryApplianceManager:
         )
         self._resubscribe_solar()
         state = self.hass.states.get(self.power_entity)
-        if state is not None:
+        if state is None:
+            _LOGGER.warning(
+                "%s is configured to watch %s, which does not exist. Nothing "
+                "will be detected until it is pointed at a sensor that does - "
+                "Settings > Devices & Services > Laundry Assistant > Configure. "
+                "This is what a replaced plug looks like.",
+                self.name,
+                self.power_entity,
+            )
+        else:
             self._ingest(state, dt_util.utcnow())
-            self._notify_listeners()
+        self._notify_listeners()
 
     async def async_unload(self) -> None:
         for unsub in self._unsubs:
@@ -729,6 +741,28 @@ class LaundryApplianceManager:
         if median <= 0:
             return None
         return statistics.stdev(self._intervals) / median > 0.25
+
+    @property
+    def power_source_status(self) -> str:
+        """Whether the configured power sensor is actually delivering.
+
+        Three outcomes, because they need different words in front of the
+        user. "missing" means the entity does not exist at all - almost
+        always a plug that was replaced, leaving the appliance pointed at a
+        dead entity. "unavailable" means it exists but is not reporting -
+        a plug that dropped off the network. "ok" is everything else.
+
+        Without this the integration simply sat at idle forever, saying
+        nothing, which is indistinguishable from an appliance that has not
+        been used. That happened on a real installation and went unnoticed
+        for days.
+        """
+        state = self.hass.states.get(self.power_entity)
+        if state is None:
+            return POWER_SOURCE_MISSING
+        if state.state in (None, "", "unknown", "unavailable"):
+            return POWER_SOURCE_UNAVAILABLE
+        return POWER_SOURCE_OK
 
     @property
     def detection_reliable(self) -> bool:

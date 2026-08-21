@@ -353,3 +353,31 @@ class TestRealDryerCurve:
         # 60 minutes of drying plus the 90-second heat pause and the
         # four minutes before the cool-down is accepted.
         assert 60 < minutes_in(manager, PHASE_DRYING) < 70
+
+
+class TestPowerSourceStatus:
+    """An appliance pointed at a sensor that is not there must say so.
+
+    A live installation replaced its washing machine plug, which left the
+    integration watching an entity that no longer existed. It sat at idle
+    for days, which looks exactly like a machine nobody has used.
+    """
+
+    def test_a_missing_entity_is_reported(self):
+        manager = make_manager("washer")
+        manager.hass.states.get = lambda entity_id: None
+        assert manager.power_source_status == "missing"
+
+    def test_an_unavailable_entity_is_reported(self):
+        from .curves import FakeState
+
+        manager = make_manager("washer")
+        manager.hass.states.get = lambda entity_id: FakeState("unavailable")
+        assert manager.power_source_status == "unavailable"
+
+    def test_a_reporting_entity_is_ok(self):
+        from .curves import FakeState
+
+        manager = make_manager("washer")
+        manager.hass.states.get = lambda entity_id: FakeState(120)
+        assert manager.power_source_status == "ok"

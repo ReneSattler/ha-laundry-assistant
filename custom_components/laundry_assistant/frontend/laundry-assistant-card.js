@@ -66,6 +66,10 @@ const STRINGS = {
     reminderPending: "A reminder is pending.",
     dismiss: "Dismiss",
     noEntity: "Entity not found",
+    sourceMissing:
+      "The configured power sensor ({entity}) does not exist. Nothing can be detected until this appliance is pointed at a sensor that does - the usual cause is a replaced plug.",
+    sourceUnavailable:
+      "The power sensor ({entity}) is not reporting. The plug is probably offline.",
     anomalyTitle: "Unusual cycle",
     anomalyDetection: "Warn about unusual cycles",
     anomalySensitivity: "Report a deviation beyond",
@@ -128,6 +132,10 @@ const STRINGS = {
     reminderPending: "Eine Erinnerung ist aktiv.",
     dismiss: "Verwerfen",
     noEntity: "Entität nicht gefunden",
+    sourceMissing:
+      "Der eingestellte Leistungssensor ({entity}) existiert nicht. Solange dieses Gerät nicht auf einen vorhandenen Sensor zeigt, wird nichts erkannt - meist steckt eine getauschte Steckdose dahinter.",
+    sourceUnavailable:
+      "Der Leistungssensor ({entity}) meldet nichts. Vermutlich ist die Steckdose offline.",
     anomalyTitle: "Ungewöhnlicher Durchgang",
     anomalyDetection: "Vor ungewöhnlichen Durchgängen warnen",
     anomalySensitivity: "Melden ab Abweichung von",
@@ -538,6 +546,17 @@ class LaundryStatusCard extends LaundryBaseCard {
   _renderBanners() {
     const a = this._attrs;
     let html = "";
+    // First, because nothing else on the card means anything if the
+    // appliance is not being measured at all.
+    if (a.power_source_status && a.power_source_status !== "ok") {
+      const key =
+        a.power_source_status === "missing" ? "sourceMissing" : "sourceUnavailable";
+      html += `
+        <div class="banner alert">
+          <ha-icon icon="mdi:alert-decagram"></ha-icon>
+          <div>${escapeHtml(t(this._hass, key, { entity: a.power_entity }))}</div>
+        </div>`;
+    }
     if (a.update_interval_ok === false) {
       html += `
         <div class="banner">

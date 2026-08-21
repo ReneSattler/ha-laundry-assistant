@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.2.0 - 2026-08-21
+
+Everything here came out of reading a live installation's data - a washing
+machine and a tumble dryer that had been running for days. Six fixes, none
+of which any synthetic curve had suggested.
+
+### Fixed
+
+- **One cycle was recorded as several runs.** A run ended after four
+  minutes of quiet, but a boil wash is quiet for longer than that while it
+  soaks. The wait is now long until the appliance has done the thing it
+  does last - the spin, or the cool-down - and short afterwards. Splitting
+  poisons the history that remaining time, calibration and the weekly
+  totals all learn from; closing late only delays the reminder.
+- **A plug reporting every five minutes produced a confident fiction.** At
+  Tasmota's default of one reading per 300 s, a 47-minute wash yielded
+  eleven samples: the band never left "high" and the cycle was recorded as
+  one 39-minute heating phase, which then became thirteen calibration runs
+  and twelve one-off "programs". Such runs are now marked unreliable and
+  kept out of everything that learns, while still counting for energy and
+  the finished reminder.
+- **The warning that exists for exactly that never fired.** It needed ten
+  intervals before judging anything, and a whole wash at 300 s spacing
+  produces nine. Four now.
+- **A dryer's heat pauses were read as cool-downs.** A heat-pump dryer
+  switches its heat off for about a minute throughout the programme; each
+  pause was announced as a cool-down and taken back. A cool-down now needs
+  four minutes of low draw.
+- **Every drying cycle opened with a phantom cool-down**, because the drum
+  turns before the heat comes on and having seen drying once was enough to
+  admit one. A cool-down now also requires a programme already five
+  minutes old. Together these two stop the drying phase being fragmented,
+  which is why runs of the same programme never clustered.
+- **A replaced plug left the integration silent.** Pointed at an entity
+  that no longer existed, it sat at idle indefinitely - indistinguishable
+  from an appliance nobody had used. The card now says so, and setup logs
+  a warning naming the entity.
+- **Editing a field on Android lost focus every few seconds**, because the
+  card rebuilt its DOM on every power reading. Guard ported from
+  ha-irrigation-sequencer and adapted for the light DOM.
+
 ## 0.1.0 - 2026-08-04
 
 First release. Verified in a Home Assistant container, against synthetic

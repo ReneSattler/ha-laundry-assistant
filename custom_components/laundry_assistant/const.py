@@ -197,6 +197,15 @@ MIN_SAMPLES_FOR_INTERVAL_CHECK = 4
 # recorded this way are marked and kept out of everything that learns.
 UNUSABLE_UPDATE_INTERVAL_SECONDS = 120
 
+# Whether the configured power sensor is delivering anything at all.
+# "missing" is the entity being gone entirely, which is what replacing a
+# plug leaves behind; "unavailable" is a plug that has dropped off the
+# network. Both used to be silent, and an appliance pointed at a dead
+# entity is indistinguishable from one nobody has used.
+POWER_SOURCE_OK = "ok"
+POWER_SOURCE_MISSING = "missing"
+POWER_SOURCE_UNAVAILABLE = "unavailable"
+
 # --------------------------------------------------------------------------- #
 # Calibration
 # --------------------------------------------------------------------------- #
@@ -364,6 +373,7 @@ ATTR_CALIBRATION_RUNS_REQUIRED = "calibration_runs_required"
 ATTR_CALIBRATION_PROPOSAL = "calibration_proposal"
 ATTR_UPDATE_INTERVAL_SECONDS = "update_interval_seconds"
 ATTR_UPDATE_INTERVAL_OK = "update_interval_ok"
+ATTR_POWER_SOURCE_STATUS = "power_source_status"
 ATTR_REMINDER_ENABLED = "reminder_enabled"
 ATTR_REMINDER_DELAY_MINUTES = "reminder_delay_minutes"
 ATTR_REMINDER_REPEAT_MINUTES = "reminder_repeat_minutes"
