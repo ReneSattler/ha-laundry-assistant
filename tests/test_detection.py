@@ -19,6 +19,7 @@ from custom_components.laundry_assistant.const import (
     PHASE_WASHING,
 )
 from custom_components.laundry_assistant.detection import (
+    COOLDOWN_MIN_SECONDS,
     DRAIN_MAX_SECONDS,
     WASH_ALTERNATIONS,
     WASH_BURST_MAX_SECONDS,
@@ -52,12 +53,12 @@ def test_classify_boundaries(watts, expected):
     assert classify(watts, THRESHOLDS) == expected
 
 
-def ctx(band, dwell=0.0, seen=None, alternations=0, watts=100.0):
+def ctx(band, dwell=0.0, seen=None, alternations=0, watts=100.0, elapsed=600.0):
     return PhaseContext(
         band=band,
         band_dwell_seconds=dwell,
         watts=watts,
-        run_elapsed_seconds=600.0,
+        run_elapsed_seconds=elapsed,
         seen_phases=seen or set(),
         alternations=alternations,
     )
@@ -125,8 +126,26 @@ class TestDryerRules:
         assert phase == PHASE_HEATING
 
     def test_sustained_low_after_drying_is_cooldown(self):
-        phase, _ = next_phase_dryer(PHASE_DRYING, ctx(BAND_LOW, dwell=120))
+        phase, _ = next_phase_dryer(
+            PHASE_DRYING, ctx(BAND_LOW, dwell=COOLDOWN_MIN_SECONDS, elapsed=3600)
+        )
         assert phase == PHASE_COOLDOWN
+
+    def test_a_minute_long_heat_pause_is_not_a_cooldown(self):
+        """A real heat-pump dryer switches its heat off for about a minute
+        at a time throughout the programme. Each of those was reported as a
+        cool-down and then taken back."""
+        phase, _ = next_phase_dryer(PHASE_DRYING, ctx(BAND_LOW, dwell=90, elapsed=3600))
+        assert phase == PHASE_DRYING
+
+    def test_no_cooldown_before_the_programme_has_got_going(self):
+        """A dryer opens by turning the drum without heat, which looks
+        exactly like a cool-down from the outside."""
+        phase, _ = next_phase_dryer(
+            PHASE_DRYING,
+            ctx(BAND_LOW, dwell=COOLDOWN_MIN_SECONDS, elapsed=30, seen={PHASE_DRYING}),
+        )
+        assert phase == PHASE_DRYING
 
     def test_a_brief_dip_is_not_cooldown(self):
         phase, _ = next_phase_dryer(PHASE_DRYING, ctx(BAND_LOW, dwell=10))

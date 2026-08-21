@@ -55,7 +55,19 @@ SPIN_EXIT_SECONDS = 180
 WASH_ALTERNATIONS = 2
 # A dryer's cool-down is the drum turning without heat: a sustained drop to
 # "low" after drying, held at least this long before it is reported.
-COOLDOWN_MIN_SECONDS = 60
+#
+# Measured against a real heat-pump dryer: its heat switches off for around
+# a minute at a time throughout the programme, and at sixty seconds each of
+# those pauses was reported as a cool-down and then taken back. A genuine
+# cool-down runs for several minutes, so the bar sits above any pause the
+# machine takes mid-cycle.
+COOLDOWN_MIN_SECONDS = 240
+
+# ... and no cool-down at all before the programme has been going this long.
+# A dryer starts by turning the drum without heat, which looks exactly like
+# a cool-down from the outside. The same real machine opened every cycle
+# with a spurious twenty-second cool-down for that reason.
+MIN_RUN_BEFORE_COOLDOWN_SECONDS = 300
 
 
 def classify(watts: float, thresholds: dict[str, float]) -> str:
@@ -190,8 +202,14 @@ def next_phase_dryer(phase: str, ctx: PhaseContext) -> tuple[str, float]:
             return PHASE_DRYING, CONFIDENCE_CLEAR
         if band == BAND_LOW:
             # Low right at the start is the drum spinning up before the
-            # heat comes on, not a cool-down.
-            if PHASE_DRYING in ctx.seen_phases:
+            # heat comes on, not a cool-down. Having seen drying once is
+            # not enough to tell them apart - the first second of every
+            # cycle counts as drying - so the run has to have been going a
+            # while as well.
+            if (
+                PHASE_DRYING in ctx.seen_phases
+                and ctx.run_elapsed_seconds >= MIN_RUN_BEFORE_COOLDOWN_SECONDS
+            ):
                 return PHASE_COOLDOWN, CONFIDENCE_LIKELY
             return PHASE_DRYING, CONFIDENCE_UNCERTAIN
         return PHASE_DRYING, CONFIDENCE_UNCERTAIN
@@ -205,7 +223,11 @@ def next_phase_dryer(phase: str, ctx: PhaseContext) -> tuple[str, float]:
         # reported as heating.
         if band in (BAND_HIGH, BAND_MEDIUM):
             return PHASE_DRYING, CONFIDENCE_CLEAR
-        if band == BAND_LOW and ctx.band_dwell_seconds >= COOLDOWN_MIN_SECONDS:
+        if (
+            band == BAND_LOW
+            and ctx.band_dwell_seconds >= COOLDOWN_MIN_SECONDS
+            and ctx.run_elapsed_seconds >= MIN_RUN_BEFORE_COOLDOWN_SECONDS
+        ):
             return PHASE_COOLDOWN, CONFIDENCE_CLEAR
         # Could still be a momentary dip between compressor cycles.
         return PHASE_DRYING, CONFIDENCE_UNCERTAIN

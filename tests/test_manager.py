@@ -61,7 +61,11 @@ class TestPhaseTimelines:
         manager = make_manager("dryer")
         feed(manager, HEAT_PUMP_DRYER_CYCLE)
         assert phases(manager) == [PHASE_DRYING, PHASE_COOLDOWN]
-        assert 75 < minutes_in(manager, PHASE_DRYING) < 79
+        # The curve holds 77 minutes of drying, but a cool-down is only
+        # accepted once the low band has held for four minutes, so those
+        # four count as drying. That is the deliberate trade: a cool-down
+        # recognised late, against a heat pause never mistaken for one.
+        assert 77 <= minutes_in(manager, PHASE_DRYING) < 83
 
     def test_condenser_dryer_cycle(self):
         manager = make_manager("dryer")
@@ -297,3 +301,55 @@ class TestCoarseSensorIsNotTrusted:
         assert manager.detection_reliable is True
         assert manager.runs[-1]["reliable"] is True
         assert manager.calibration_runs == 1
+
+
+class TestRealDryerCurve:
+    """Taken from a live heat-pump dryer, whose plug reports every second.
+
+    Its recorded timeline read drying 1s, cooldown 19s, drying 2569s,
+    cooldown 58s - two cool-downs that were not cool-downs. The first was
+    the drum turning before the heat came on; the second was the heat
+    switching off for a minute mid-programme, which that machine does
+    throughout.
+    """
+
+    def _curve(self):
+        # Warm-up at drum-only power, the long drying stretch, a mid-cycle
+        # heat pause, more drying, then the real cool-down.
+        return [
+            (5, 0.5),
+            (2, 92),                          # drum only, before the heat
+            (40, alternating(820, 870, 30)),  # drying
+            (1.5, 115),                       # heat off for ninety seconds
+            (20, alternating(820, 870, 30)),  # drying resumes
+            (9, 120),                         # the actual cool-down
+            (10, 0.5),
+        ]
+
+    def test_the_warm_up_is_not_a_cooldown(self):
+        manager = make_manager("dryer")
+        feed(manager, self._curve())
+        sequence = phases(manager)
+        assert sequence[0] != PHASE_COOLDOWN, (
+            f"the cycle opened with a spurious cool-down: {sequence}"
+        )
+
+    def test_a_mid_cycle_heat_pause_is_not_a_cooldown(self):
+        manager = make_manager("dryer")
+        feed(manager, self._curve())
+        sequence = phases(manager)
+        # Exactly one cool-down, and it has to be the last thing that
+        # happened rather than something in the middle.
+        assert sequence.count(PHASE_COOLDOWN) == 1, f"got {sequence}"
+        assert sequence[-1] == PHASE_COOLDOWN
+
+    def test_the_drying_phase_is_not_chopped_into_pieces(self):
+        """The spurious cool-downs split drying into fragments, which is
+        why eight runs of the same programme never clustered together."""
+        manager = make_manager("dryer")
+        feed(manager, self._curve())
+        sequence = phases(manager)
+        assert sequence.count(PHASE_DRYING) == 1, f"drying was split: {sequence}"
+        # 60 minutes of drying plus the 90-second heat pause and the
+        # four minutes before the cool-down is accepted.
+        assert 60 < minutes_in(manager, PHASE_DRYING) < 70
