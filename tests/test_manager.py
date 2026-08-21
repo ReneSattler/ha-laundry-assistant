@@ -239,3 +239,61 @@ class TestRunSplitting:
         manager.calibration_state = "recording"
         feed(manager, BOIL_WASH_WITH_SOAK)
         assert manager.calibration_runs == 1
+
+
+class TestCoarseSensorIsNotTrusted:
+    """Readings every five minutes must not produce a confident timeline.
+
+    Taken from a live installation whose Gosund plug still had Tasmota's
+    default TelePeriod of 300 s. The integration reported one 39-minute
+    "heating" phase for a whole boil wash, recorded thirteen calibration
+    runs and invented twelve one-off "programs" - all of it fiction built
+    on eleven samples, and all of it persisted.
+    """
+
+    # The actual readings, at the actual 300 s spacing.
+    REAL_GOSUND_READINGS = [2041, 12, 2141, 2133, 2036, 2160, 2141, 2139, 2107, 2081, 5]
+
+    def _feed_real_curve(self, manager):
+        from datetime import datetime, timezone
+
+        from .curves import FakeState
+
+        when = datetime(2026, 8, 19, 9, 10, 0, tzinfo=timezone.utc)
+        for watts in self.REAL_GOSUND_READINGS:
+            manager._ingest(FakeState(watts), when)
+            when += timedelta(seconds=300)
+        # Let the run close out.
+        for _ in range(10):
+            manager._ingest(FakeState(0.4), when)
+            when += timedelta(seconds=300)
+
+    def test_the_reporting_rate_is_recognised_as_unusable(self):
+        manager = make_manager("washer")
+        self._feed_real_curve(manager)
+        assert manager.update_interval_seconds == 300.0
+        assert manager.update_interval_ok is False
+        assert manager.detection_reliable is False
+
+    def test_nothing_is_learned_from_it(self):
+        manager = make_manager("washer")
+        manager.calibration_state = "recording"
+        self._feed_real_curve(manager)
+
+        # The run itself is kept - its energy is still roughly right, and
+        # the user should see that a wash happened.
+        assert manager.runs, "the run should still be recorded"
+        assert manager.runs[-1]["reliable"] is False
+        # But none of it may reach anything that learns.
+        assert manager.calibration_runs == 0
+        assert manager.programs == []
+        assert manager.last_anomalies == []
+
+    def test_a_dense_sensor_is_still_learned_from(self):
+        """The gate must not disable learning for a correctly configured plug."""
+        manager = make_manager("washer")
+        manager.calibration_state = "recording"
+        feed(manager, WASHER_CYCLE)
+        assert manager.detection_reliable is True
+        assert manager.runs[-1]["reliable"] is True
+        assert manager.calibration_runs == 1

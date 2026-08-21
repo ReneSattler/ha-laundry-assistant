@@ -181,8 +181,21 @@ MAX_STORED_RUNS = 60
 # cycle or a cool-down phase can pass between two readings. Tasmota's default
 # TelePeriod of 300 s is five times this.
 MAX_USABLE_UPDATE_INTERVAL_SECONDS = 30
-# Samples needed before the observed interval is judged at all.
-MIN_SAMPLES_FOR_INTERVAL_CHECK = 10
+# Intervals needed before the reporting rate is judged. Deliberately low.
+# A plug left on Tasmota's default of one reading every 300 s produces only
+# nine gaps across a forty-minute wash, so a threshold of ten meant the
+# warning never fired for exactly the setup that needs it most - and the
+# user got a confident-looking but fabricated timeline instead of being
+# told to fix the plug.
+MIN_SAMPLES_FOR_INTERVAL_CHECK = 4
+
+# Beyond this the readings are too sparse to derive phases from at all.
+# At one reading every few minutes an entire wash, drain and spin can pass
+# between two samples: the band never leaves "high", and the run is
+# reported as one long heating phase. Anything learned from such a run -
+# programs, calibration thresholds, typical durations - is noise, so runs
+# recorded this way are marked and kept out of everything that learns.
+UNUSABLE_UPDATE_INTERVAL_SECONDS = 120
 
 # --------------------------------------------------------------------------- #
 # Calibration

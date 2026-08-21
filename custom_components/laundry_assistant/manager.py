@@ -50,6 +50,7 @@ from .const import (
     MAX_SAMPLES_PER_RUN,
     MAX_STORED_RUNS,
     MAX_USABLE_UPDATE_INTERVAL_SECONDS,
+    UNUSABLE_UPDATE_INTERVAL_SECONDS,
     MIN_SAMPLES_FOR_INTERVAL_CHECK,
     PHASE_FINISHED,
     PHASE_IDLE,
@@ -539,20 +540,42 @@ class LaundryApplianceManager:
         # A "run" of a couple of minutes is a door light or a control panel
         # waking up, not a wash. Recording it would poison both the
         # remaining-time estimate and the weekly totals.
+        reliable = self.detection_reliable
+        run["reliable"] = reliable
+
         if duration >= RUN_START_SECONDS * 3:
-            # Compare against the history as it stood *before* this run, so
-            # the run is never part of its own baseline.
-            self.last_anomalies = self._detect_anomalies(run)
-            self._assign_program(run)
+            # Energy and the reminder survive coarse readings: integrating a
+            # step function is still roughly right, and "the machine has
+            # stopped" needs no phase detail. Everything that *learns* does
+            # not, so it is skipped rather than fed fiction it would then
+            # persist and keep applying long after the plug is fixed.
             self.total_energy_kwh = round(self.total_energy_kwh + energy_kwh, 4)
             self.runs.append(run)
             self.runs = self.runs[-MAX_STORED_RUNS:]
             self.last_run = run
-            if self.calibration_state == CALIBRATION_STATE_RECORDING:
-                self._record_calibration_run(samples)
             self._schedule_reminder(finished)
-            if self.last_anomalies:
-                self.hass.async_create_task(self._async_notify_anomalies())
+
+            if reliable:
+                # Compare against the history as it stood *before* this run,
+                # so the run is never part of its own baseline.
+                self.last_anomalies = self._detect_anomalies(run)
+                self._assign_program(run)
+                if self.calibration_state == CALIBRATION_STATE_RECORDING:
+                    self._record_calibration_run(samples)
+                if self.last_anomalies:
+                    self.hass.async_create_task(self._async_notify_anomalies())
+            else:
+                self.last_anomalies = []
+                _LOGGER.warning(
+                    "%s: the power sensor reports about every %.0f s, which is "
+                    "too sparse to detect phases from. The run was recorded for "
+                    "its energy only; programs, calibration and deviation "
+                    "warnings were skipped. Configure the plug to report at "
+                    "least every %d s (on Tasmota: PowerDelta 10).",
+                    self.name,
+                    self.update_interval_seconds or 0.0,
+                    MAX_USABLE_UPDATE_INTERVAL_SECONDS,
+                )
 
         self.run_started = None
         self.phase = PHASE_FINISHED if duration >= RUN_START_SECONDS * 3 else PHASE_IDLE
@@ -706,6 +729,28 @@ class LaundryApplianceManager:
         if median <= 0:
             return None
         return statistics.stdev(self._intervals) / median > 0.25
+
+    @property
+    def detection_reliable(self) -> bool:
+        """Whether the readings are dense enough to derive phases from.
+
+        A plug reporting every few minutes produces a timeline that looks
+        confident and is fiction: an entire wash, drain and spin passes
+        between two samples, the band never leaves "high", and the run is
+        recorded as one long heating phase. Everything the integration
+        learns - programs, calibration thresholds, typical durations - is
+        then built on that fiction, and the damage outlives the bad
+        readings because it is persisted.
+
+        Unknown counts as reliable: refusing to work until the reporting
+        rate has been measured would leave a fresh install inert.
+        """
+        interval = self.update_interval_seconds
+        if interval is None:
+            return True
+        if self.reports_on_change:
+            return True
+        return interval <= UNUSABLE_UPDATE_INTERVAL_SECONDS
 
     @property
     def update_interval_ok(self) -> bool | None:
