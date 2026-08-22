@@ -219,6 +219,18 @@ plug's power sensor.
 
 ## Testing
 
+`pytest tests/` covers the detection logic and the manager. The card's own
+guard against losing focus mid-edit is a DOM/timing behaviour no Python test
+can see, so it has its own pages under `tests/frontend/` - each wraps the
+real card inside a synthetic `hui-card` shadow root, matching how Home
+Assistant actually hosts a custom card, and drives a scenario that used to
+wipe a field being typed into:
+
+```bash
+docker run --rm -v "$PWD:/repo" -w /repo mcr.microsoft.com/playwright/python:latest \
+  python tests/frontend/run.py
+```
+
 `docker-compose.yml` starts a throwaway Home Assistant instance with this
 repository bind-mounted into its config directory:
 

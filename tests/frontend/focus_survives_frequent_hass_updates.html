@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head>
+<body>
+<div id="host"></div>
+<script>
+  class HaIcon extends HTMLElement { connectedCallback(){ this.textContent="*"; } }
+  class HaCard extends HTMLElement {}
+  class HaSwitch extends HTMLElement {
+    get checked(){ return this.hasAttribute("checked"); }
+    set checked(v){ if(v) this.setAttribute("checked",""); else this.removeAttribute("checked"); }
+  }
+  customElements.define("ha-icon", HaIcon);
+  customElements.define("ha-card", HaCard);
+  customElements.define("ha-switch", HaSwitch);
+</script>
+<script src="../../custom_components/laundry_assistant/frontend/laundry-assistant-card.js"></script>
+<script>
+  // Simulates Home Assistant's real wrapping: the settings card sits
+  // inside hui-card's OWN shadow root, exactly like on a live dashboard.
+  class HuiCard extends HTMLElement {
+    connectedCallback() {
+      const root = this.attachShadow({ mode: "open" });
+      this._inner = document.createElement("laundry-assistant-settings-card");
+      root.appendChild(this._inner);
+    }
+  }
+  customElements.define("hui-card", HuiCard);
+
+  const hui = document.createElement("hui-card");
+  document.getElementById("host").appendChild(hui);
+  const card = hui._inner;
+
+  const ENTITY = "sensor.washing_machine_phase";
+  let tick = 0;
+  function hassAt(programName) {
+    tick++;
+    return {
+      language: "de",
+      locale: { language: "de" },
+      services: { notify: {} },
+      states: {
+        [ENTITY]: {
+          entity_id: ENTITY,
+          state: "idle",
+          attributes: {
+            friendly_name: "Waschmaschine",
+            entry_id: "demo",
+            appliance_type: "washer",
+            power_entity: "sensor.x",
+            known_phases: ["intake"],
+            last_run: null,
+            week_cycles: 0, week_energy_kwh: 0, week_cost: 0,
+            price_per_kwh: 0.3, currency: "EUR",
+            thresholds: { standby: 2, low: 24, medium: 160, high: 1100 },
+            calibration_state: "inactive", calibration_runs: 0,
+            calibration_runs_required: 3, calibration_proposal: null,
+            update_interval_seconds: 10, update_interval_ok: true,
+            reminder_enabled: false, reminder_delay_minutes: 30,
+            reminder_repeat_minutes: 30, reminder_max_repeats: 3,
+            reminder_pending: false, notify_target: null,
+            anomalies: [], anomaly_detection_enabled: false, anomaly_factor: 1.6,
+            programs: [{ id: "p1", name: programName, timeline: [], duration_seconds: 4320, energy_kwh: 0.9, runs: 6 }],
+            current_program: null, total_energy_kwh: 1, feed_in_tariff: 0.08,
+            solar_entity: null, consumption_entity: null, solar_surplus_w: null,
+            typical_draw_w: 400, solar_covers_cycle: null, solar_saving_per_cycle: 0,
+            chain_to_dryer: false, dryer_available: null,
+            power_source_status: "ok", tick,
+          },
+        },
+      },
+      callService: () => Promise.resolve(),
+    };
+  }
+
+  card.setConfig({ entity: ENTITY });
+  card.hass = hassAt("");
+
+  async function run() {
+    const input = hui.shadowRoot.querySelector('[data-program="p1"]');
+    input.focus();
+    input.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+
+    const toType = "Buntwäsche 40";
+    for (const ch of toType) {
+      input.value += ch;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      // A hui-card-hosted card gets a fresh hass object on effectively
+      // every state change anywhere in the instance - simulate that
+      // hammering while the user is mid-keystroke.
+      card.hass = hassAt("");
+      await new Promise((r) => setTimeout(r, 15));
+    }
+
+    const stillFocused = hui.shadowRoot.querySelector('[data-program="p1"]') === document.activeElement
+      ? false // document.activeElement across the shadow boundary would be hui-card itself, not useful here
+      : (hui.shadowRoot.activeElement && hui.shadowRoot.activeElement.dataset && hui.shadowRoot.activeElement.dataset.program === "p1");
+    const finalInput = hui.shadowRoot.querySelector('[data-program="p1"]');
+    const survived = finalInput && finalInput.value === toType;
+
+    window.RESULT = { survived, finalValue: finalInput ? finalInput.value : null, stillFocused, ticks: tick };
+    document.title = survived ? "PASS" : "FAIL";
+  }
+  run();
+</script>
+</body></html>

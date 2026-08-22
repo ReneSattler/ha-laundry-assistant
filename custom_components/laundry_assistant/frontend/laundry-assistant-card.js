@@ -304,13 +304,22 @@ class LaundryBaseCard extends HTMLElement {
    * supposed to show the result, so a toggled switch would not reveal its
    * dependent section until focus happened to move elsewhere.
    *
-   * Uses document.activeElement rather than a shadow root's: this card
-   * renders into the light DOM. The containment check matters - without it
-   * a field in a completely different card would freeze this one.
+   * Deliberately not document.activeElement. This card renders into the
+   * light DOM, but Home Assistant wraps every custom card inside `hui-card`,
+   * which has its own shadow root - so in a real dashboard this card lives
+   * inside an ancestor's shadow tree whether it wants to or not.
+   * document.activeElement does not cross shadow boundaries: with focus
+   * inside our own <input>, it resolves to the outermost shadow host on the
+   * path (hui-card), not to our field, so `this.contains(...)` was always
+   * false and every field looked unfocused from the moment it lived on a
+   * real dashboard - invisible in screenshots/demo.html, which has no such
+   * wrapping. `this.querySelector(":focus")` instead searches only within
+   * our own light-DOM subtree, which is unaffected by whatever shadow roots
+   * exist above us.
    */
   _isEditingField() {
-    const active = document.activeElement;
-    if (!active || !this.contains(active)) return false;
+    const active = this.querySelector(":focus");
+    if (!active) return false;
     if (active.tagName === "TEXTAREA") return true;
     if (active.tagName === "INPUT") return !["checkbox", "range"].includes(active.type);
     return false;

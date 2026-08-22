@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.3.2 - 2026-08-22
+
+### Fixed
+
+- **Typing a programme name lost focus on every keystroke, live in Home
+  Assistant, invisible in screenshots.** The focus guard added in 0.2.0
+  checks whether a field is genuinely focused before allowing a re-render,
+  using `document.activeElement`. That is correct for a card rendering into
+  its own shadow root (ha-irrigation-sequencer's approach), but this card
+  renders into the light DOM, and Home Assistant wraps every custom card
+  inside `hui-card`, which has its own shadow root. `document.activeElement`
+  does not cross that boundary: with focus genuinely inside the name field,
+  it resolved to `hui-card` itself, not the field, so the guard concluded
+  nothing was being edited. The failure needed a second ingredient to
+  surface - the card's suppression timer is shared across every field, and
+  any unrelated control committing a change (a price edit, a toggle)
+  shrinks that shared window to 400ms - which is why it looked
+  intermittent rather than constant. Fixed by checking
+  `this.querySelector(":focus")` instead, which is evaluated within the
+  card's own subtree and is unaffected by shadow roots above it.
+
+  Verified with two pages under `tests/frontend/`, now run in CI: each
+  wraps the real card inside a synthetic `hui-card` shadow root - matching
+  how Home Assistant actually hosts it - and drives the exact scenario that
+  used to wipe the field. Confirmed to fail on the pre-fix code and pass
+  after.
+
+
 ## 0.3.1 - 2026-08-21
 
 ### Changed

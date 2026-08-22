@@ -230,6 +230,19 @@ Leistungssensor der Steckdose auswählen.
 
 ## Testen
 
+`pytest tests/` deckt Erkennungslogik und Manager ab. Der Schutz der Karte
+gegen Fokusverlust während der Bearbeitung ist ein DOM-/Timing-Verhalten,
+das kein Python-Test sehen kann - dafür gibt es eigene Seiten unter
+`tests/frontend/`: Jede hüllt die echte Karte in einen künstlichen
+`hui-card`-Shadow-Root, genau wie Home Assistant eine Karte tatsächlich
+einbettet, und spielt ein Szenario durch, das früher ein gerade
+eingegebenes Feld geleert hat:
+
+```bash
+docker run --rm -v "$PWD:/repo" -w /repo mcr.microsoft.com/playwright/python:latest \
+  python tests/frontend/run.py
+```
+
 `docker-compose.yml` startet eine Wegwerf-Instanz von Home Assistant, in
 deren Konfigurationsverzeichnis dieses Repository eingehängt wird:
 
