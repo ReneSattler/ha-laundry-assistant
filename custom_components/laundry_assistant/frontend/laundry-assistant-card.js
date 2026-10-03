@@ -28,6 +28,7 @@ const STRINGS = {
     cooldown: "Cooling down",
     running: "Running",
     finished: "Finished",
+    aborted: "Aborted",
     notRunning: "Not running",
     remaining: "Remaining",
     elapsed: "Elapsed",
@@ -104,6 +105,7 @@ const STRINGS = {
     cooldown: "Abkühlen",
     running: "Läuft",
     finished: "Fertig",
+    aborted: "Abgebrochen",
     notRunning: "Läuft nicht",
     remaining: "Restzeit",
     elapsed: "Laufzeit",
@@ -181,6 +183,7 @@ const PHASE_COLORS = {
   cooldown: "var(--info-color, #039be5)",
   running: "var(--primary-color, #03a9f4)",
   finished: "var(--success-color, #43a047)",
+  aborted: "var(--warning-color, #ffa600)",
   idle: "var(--disabled-text-color, #bdbdbd)",
 };
 
