@@ -240,3 +240,46 @@ set_chain_to_dryer:
       required: true
       selector:
         boolean:
+
+set_price_sensor:
+  name: Set dynamic price source
+  description: >-
+    Points the appliance at a price sensor (e.g. Tibber). Omit the entity
+    to use the fixed price again.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+    price_entity:
+      required: false
+      selector:
+        entity:
+          domain: sensor
+
+reset_consumable_counter:
+  name: Reset consumable counter
+  description: >-
+    Resets the count of finished cycles since the last reset
+    (detergent, decalcification).
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+
+plan_ready_by:
+  name: Plan ready-by time
+  description: >-
+    Stores when the laundry should be ready; the latest start is derived
+    from the learned duration. Omit the time to clear the plan.
+  fields:
+    entry_id:
+      required: true
+      selector:
+        text:
+    ready_by:
+      required: false
+      example: "2026-10-04T18:00:00+02:00"
+      selector:
+        text:

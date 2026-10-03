@@ -21,7 +21,16 @@ from .const import (
     ATTR_APPLIANCE_TYPE,
     ATTR_CONSUMPTION_ENTITY,
     ATTR_CURRENT_PROGRAM,
+    ATTR_CYCLES_SINCE_RESET,
+    ATTR_EFFECTIVE_PRICE,
     ATTR_FEED_IN_TARIFF,
+    ATTR_LAST_OUTCOME,
+    ATTR_MONTH_COST,
+    ATTR_MONTH_CYCLES,
+    ATTR_MONTH_ENERGY_KWH,
+    ATTR_PLANNED_LATEST_START,
+    ATTR_PLANNED_READY_BY,
+    ATTR_PRICE_ENTITY,
     ATTR_PROGRAMS,
     ATTR_SOLAR_COVERS_CYCLE,
     ATTR_SOLAR_ENTITY,
@@ -85,8 +94,12 @@ async def async_setup_entry(
             LaundryWeekCyclesSensor(manager, entry),
             LaundryWeekEnergySensor(manager, entry),
             LaundryWeekCostSensor(manager, entry),
+            LaundryMonthCyclesSensor(manager, entry),
+            LaundryMonthEnergySensor(manager, entry),
+            LaundryMonthCostSensor(manager, entry),
             LaundryTotalEnergySensor(manager, entry),
             LaundryFinishesAtSensor(manager, entry),
+            LaundryLatestStartSensor(manager, entry),
         ]
     )
 
@@ -172,6 +185,17 @@ class LaundryPhaseSensor(LaundryBaseSensor):
             ATTR_WEEK_CYCLES: manager.week_cycles,
             ATTR_WEEK_ENERGY_KWH: manager.week_energy_kwh,
             ATTR_WEEK_COST: manager.week_cost,
+            ATTR_MONTH_CYCLES: manager.month_cycles,
+            ATTR_MONTH_ENERGY_KWH: manager.month_energy_kwh,
+            ATTR_MONTH_COST: manager.month_cost,
+            ATTR_LAST_OUTCOME: manager.last_outcome,
+            ATTR_CYCLES_SINCE_RESET: manager.cycles_since_reset,
+            ATTR_PRICE_ENTITY: manager.price_entity,
+            ATTR_EFFECTIVE_PRICE: manager.effective_price,
+            ATTR_PLANNED_READY_BY: manager.planned_ready_by,
+            ATTR_PLANNED_LATEST_START: manager.planned_latest_start.isoformat()
+            if manager.planned_latest_start
+            else None,
             ATTR_PRICE_PER_KWH: manager.price_per_kwh,
             ATTR_CURRENCY: manager.currency,
             ATTR_THRESHOLDS: manager.thresholds,
@@ -361,3 +385,66 @@ class LaundryWeekCostSensor(LaundryBaseSensor):
     @property
     def native_value(self) -> float:
         return self._manager.week_cost
+
+
+class LaundryMonthCyclesSensor(LaundryBaseSensor):
+    """Completed runs so far this month."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_icon = "mdi:counter"
+
+    def __init__(self, manager: LaundryApplianceManager, entry: ConfigEntry) -> None:
+        super().__init__(manager, entry, "month_cycles")
+
+    @property
+    def native_value(self) -> int:
+        return self._manager.month_cycles
+
+
+class LaundryMonthEnergySensor(LaundryBaseSensor):
+    """Energy used by all runs so far this month."""
+
+    _attr_native_unit_of_measurement = "kWh"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 2
+    _attr_icon = "mdi:lightning-bolt-outline"
+
+    def __init__(self, manager: LaundryApplianceManager, entry: ConfigEntry) -> None:
+        super().__init__(manager, entry, "month_energy")
+
+    @property
+    def native_value(self) -> float:
+        return self._manager.month_energy_kwh
+
+
+class LaundryMonthCostSensor(LaundryBaseSensor):
+    """Cost of all runs so far this month."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 2
+    _attr_icon = "mdi:cash-multiple"
+
+    def __init__(self, manager: LaundryApplianceManager, entry: ConfigEntry) -> None:
+        super().__init__(manager, entry, "month_cost")
+
+    @property
+    def native_unit_of_measurement(self) -> str:
+        return self._manager.currency
+
+    @property
+    def native_value(self) -> float:
+        return self._manager.month_cost
+
+
+class LaundryLatestStartSensor(LaundryBaseSensor):
+    """Latest start time to be ready by the planned time."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:clock-start"
+
+    def __init__(self, manager: LaundryApplianceManager, entry: ConfigEntry) -> None:
+        super().__init__(manager, entry, "latest_start")
+
+    @property
+    def native_value(self):
+        return self._manager.planned_latest_start

@@ -90,6 +90,10 @@ PHASE_SPINNING = "spinning"
 PHASE_DRYING = "drying"
 PHASE_COOLDOWN = "cooldown"
 PHASE_FINISHED = "finished"
+# A run that ended without reaching its terminal phase - plug pulled,
+# breaker tripped or programme cancelled mid-cycle. Purely derived from the
+# power curve plus the phase timeline, no extra hardware.
+PHASE_ABORTED = "aborted"
 # Generic fallback: the appliance is clearly running, but the band pattern
 # does not match any known phase for its type. Reported with low confidence
 # rather than guessing a specific phase.
@@ -109,6 +113,7 @@ ALL_PHASES = [
     PHASE_COOLDOWN,
     PHASE_RUNNING,
     PHASE_FINISHED,
+    PHASE_ABORTED,
 ]
 
 PHASES_BY_TYPE = {
@@ -355,6 +360,9 @@ SERVICE_SET_ANOMALY_DETECTION = "set_anomaly_detection"
 SERVICE_DISMISS_ANOMALIES = "dismiss_anomalies"
 SERVICE_SET_PROGRAM_NAME = "set_program_name"
 SERVICE_SET_SOLAR = "set_solar"
+SERVICE_SET_PRICE_SENSOR = "set_price_sensor"
+SERVICE_RESET_CONSUMABLE_COUNTER = "reset_consumable_counter"
+SERVICE_PLAN_READY_BY = "plan_ready_by"
 
 # --------------------------------------------------------------------------- #
 # State attributes
@@ -381,6 +389,15 @@ ATTR_LAST_RUN = "last_run"
 ATTR_WEEK_CYCLES = "week_cycles"
 ATTR_WEEK_ENERGY_KWH = "week_energy_kwh"
 ATTR_WEEK_COST = "week_cost"
+ATTR_MONTH_CYCLES = "month_cycles"
+ATTR_MONTH_ENERGY_KWH = "month_energy_kwh"
+ATTR_MONTH_COST = "month_cost"
+ATTR_LAST_OUTCOME = "last_outcome"
+ATTR_CYCLES_SINCE_RESET = "cycles_since_reset"
+ATTR_PRICE_ENTITY = "price_entity"
+ATTR_EFFECTIVE_PRICE = "effective_price"
+ATTR_PLANNED_READY_BY = "planned_ready_by"
+ATTR_PLANNED_LATEST_START = "planned_latest_start"
 ATTR_PRICE_PER_KWH = "price_per_kwh"
 ATTR_CURRENCY = "currency"
 ATTR_THRESHOLDS = "thresholds"

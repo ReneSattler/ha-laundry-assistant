@@ -58,7 +58,8 @@
           "drying": "Trocknen",
           "cooldown": "Abkühlen",
           "running": "Läuft",
-          "finished": "Fertig"
+          "finished": "Fertig",
+          "aborted": "Abgebrochen"
         }
       },
       "remaining": {
@@ -84,6 +85,18 @@
       },
       "finishes_at": {
         "name": "Fertig um"
+      },
+      "month_cycles": {
+        "name": "Durchgänge diesen Monat"
+      },
+      "month_energy": {
+        "name": "Energie diesen Monat"
+      },
+      "month_cost": {
+        "name": "Kosten diesen Monat"
+      },
+      "latest_start": {
+        "name": "Spätester Start"
       }
     },
     "binary_sensor": {
@@ -294,6 +307,44 @@
         "enabled": {
           "name": "Aktiv",
           "description": "Ob der Trockner erwähnt wird."
+        }
+      }
+    },
+    "set_price_sensor": {
+      "name": "Dynamischen Preis setzen",
+      "description": "Verknüpft das Gerät mit einem Preissensor (z.B. Tibber). Leer lassen für Festpreis.",
+      "fields": {
+        "entry_id": {
+          "name": "Gerät",
+          "description": "Die entry_id des Geräts aus den Attributen des Phasen-Sensors."
+        },
+        "price_entity": {
+          "name": "Preissensor",
+          "description": "Sensor mit aktuellem Preis pro kWh."
+        }
+      }
+    },
+    "reset_consumable_counter": {
+      "name": "Verbrauchszähler zurücksetzen",
+      "description": "Setzt die Zählung der Durchgänge seit letztem Reset zurück (Waschmittel, Entkalken).",
+      "fields": {
+        "entry_id": {
+          "name": "Gerät",
+          "description": "Die entry_id des Geräts aus den Attributen des Phasen-Sensors."
+        }
+      }
+    },
+    "plan_ready_by": {
+      "name": "Fertig-um-Zeit planen",
+      "description": "Speichert, wann die Wäsche fertig sein soll; der späteste Start ergibt sich aus der gelernten Dauer.",
+      "fields": {
+        "entry_id": {
+          "name": "Gerät",
+          "description": "Die entry_id des Geräts aus den Attributen des Phasen-Sensors."
+        },
+        "ready_by": {
+          "name": "Fertig um",
+          "description": "ISO-Zeitpunkt, wann der Durchgang fertig sein soll. Leer lassen zum Löschen."
         }
       }
     }
