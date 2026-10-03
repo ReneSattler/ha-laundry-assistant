@@ -127,7 +127,18 @@ coarse setting.
 - **Remaining time**, learned from previous runs of the same appliance
 - **Energy and cost per cycle**, from trapezoidal integration of the power
   curve and a configurable price per kWh
-- **Weekly totals**: cycles, energy and cost
+- **Weekly and monthly totals**: cycles, energy and cost
+- **Aborted runs**: a cycle that never reaches its terminal phase (spin /
+  cool-down) is reported as `aborted` instead of `finished`. It still counts
+  for energy, but never for learning (remaining time, programs, calibration,
+  deviation warnings) or the reminder - all from the power curve alone.
+- **Dynamic price**: point the appliance at a price sensor (e.g. Tibber,
+  Octopus, ENTSO-E - software-only, no extra hardware) and cycle costs use
+  the live price, falling back to the fixed price when it is unavailable.
+- **Consumable counter**: finished cycles since the last reset (detergent,
+  decalcification), with a reset service.
+- **Ready-by planner**: store when the laundry should be ready and get the
+  latest start time from the learned duration (`latest_start` sensor).
 - **Reminder** when the load is left in the drum - configurable delay,
   repeat interval and maximum repeats, sent to a `notify.mobile_app_*`
   service of your choice, defaulting to none. It stops when the appliance is
@@ -168,6 +179,10 @@ sensors:
 | `sensor.<name>_cycles_this_week` | Completed runs this week |
 | `sensor.<name>_energy_this_week` | kWh this week |
 | `sensor.<name>_cost_this_week` | Cost this week |
+| `sensor.<name>_cycles_this_month` | Completed runs this month |
+| `sensor.<name>_energy_this_month` | kWh this month |
+| `sensor.<name>_cost_this_month` | Cost this month |
+| `sensor.<name>_latest_start` | Latest start for the planned ready-by time |
 | `sensor.<name>_total_energy` | Lifetime kWh across every cycle - the one for the energy dashboard |
 | `binary_sensor.<name>_solar_covers_a_cycle` | On when solar surplus would carry a cycle |
 
@@ -188,6 +203,9 @@ exposes as an attribute.
 | Service | Purpose |
 |---|---|
 | `laundry_assistant.set_price` | Price per kWh, and optionally the currency |
+| `laundry_assistant.set_price_sensor` | Use a dynamic price sensor, or omit it for the fixed price |
+| `laundry_assistant.reset_consumable_counter` | Reset the cycles-since-reset counter |
+| `laundry_assistant.plan_ready_by` | Store when the laundry should be ready (omit to clear) |
 | `laundry_assistant.set_reminder` | Enable and configure the drum reminder |
 | `laundry_assistant.set_notify_target` | Which `notify.mobile_app_*` service to use |
 | `laundry_assistant.set_thresholds` | Band edges in watts |

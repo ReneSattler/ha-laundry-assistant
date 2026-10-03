@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.0 - 2026-10-03
+
+Power-only features: everything here is derived from the watt curve plus
+time - no extra hardware. Closes #23, #24, #25, #26, #27.
+
+### Added
+
+- **Aborted runs (#23).** A cycle that never reaches its terminal phase
+  (spin on a washer, cool-down on a dryer) reports `aborted` instead of
+  `finished`. It still counts for energy and lifetime totals, but never for
+  learning (remaining time, programs, calibration, deviation warnings),
+  the drum reminder or the consumable counter.
+- **Monthly totals (#24):** `month_cycles`, `month_energy` and `month_cost`
+  sensors, same semantics as the weekly ones, month starting on the 1st.
+- **Dynamic price sensor (#25):** `set_price_sensor` points the appliance
+  at a price sensor (Tibber/Octopus/ENTSO-E, software-only). Cycle costs
+  use the live price and fall back to the fixed price when unavailable.
+- **Consumable counter (#26):** finished cycles since the last reset, with
+  a `reset_consumable_counter` service (detergent, decalcification).
+- **Ready-by planner (#27):** `plan_ready_by` stores when the laundry
+  should be ready; a `latest_start` timestamp sensor derives the latest
+  start from the learned duration (recognised program when available).
+
 ## 0.3.2 - 2026-08-22
 
 ### Fixed

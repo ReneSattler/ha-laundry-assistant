@@ -134,7 +134,18 @@ flache Phasen, keine zu grobe Einstellung.
 - **Restzeit**, gelernt aus früheren Läufen desselben Geräts
 - **Energie und Kosten pro Durchgang**, per Trapezintegration der
   Leistungskurve und einem einstellbaren Preis pro kWh
-- **Wochensummen**: Durchgänge, Energie und Kosten
+- **Wochen- und Monatssummen**: Durchgänge, Energie und Kosten
+- **Abgebrochene Läufe**: Ein Durchgang ohne Endphase (Schleudern /
+  Abkühlen) meldet `aborted` statt `finished`. Zählt für Energie, aber nie
+  fürs Lernen (Restzeit, Programme, Kalibrierung, Warnungen) oder Erinnerung
+  - allein aus der Leistungskurve.
+- **Dynamischer Preis**: Per Preissensor (z.B. Tibber, Octopus, ENTSO-E -
+  reine Software, keine Hardware) werden Kosten zum Live-Preis gerechnet,
+  sonst zum Festpreis.
+- **Verbrauchszähler**: Durchgänge seit letztem Reset (Waschmittel,
+  Entkalken), mit Reset-Dienst.
+- **Fertig-um-Planer**: Wunschzeit speichern, spätester Start kommt aus der
+  gelernten Dauer (`latest_start`-Sensor).
 - **Erinnerung**, wenn die Wäsche in der Trommel liegen bleibt - Verzögerung,
   Wiederholungsabstand und maximale Anzahl einstellbar, an einen
   `notify.mobile_app_*`-Dienst deiner Wahl, standardmäßig an keinen. Sie
@@ -178,6 +189,10 @@ sieben Sensoren:
 | `sensor.<name>_durchgange_diese_woche` | Abgeschlossene Läufe diese Woche |
 | `sensor.<name>_energie_diese_woche` | kWh diese Woche |
 | `sensor.<name>_kosten_diese_woche` | Kosten diese Woche |
+| `sensor.<name>_durchgange_diesen_monat` | Abgeschlossene Läufe diesen Monat |
+| `sensor.<name>_energie_diesen_monat` | kWh diesen Monat |
+| `sensor.<name>_kosten_diesen_monat` | Kosten diesen Monat |
+| `sensor.<name>_spatester_start` | Spätester Start für die geplante Fertig-um-Zeit |
 | `sensor.<name>_gesamtenergie` | kWh über alle Durchgänge - der Sensor fürs Energie-Dashboard |
 | `binary_sensor.<name>_sonne_deckt_einen_durchgang` | An, wenn PV-Überschuss einen Durchgang tragen würde |
 
@@ -198,6 +213,9 @@ Attribut bereitstellt.
 | Dienst | Zweck |
 |---|---|
 | `laundry_assistant.set_price` | Preis pro kWh, optional die Währung |
+| `laundry_assistant.set_price_sensor` | Dynamischen Preissensor nutzen, oder weglassen für Festpreis |
+| `laundry_assistant.reset_consumable_counter` | Verbrauchszähler zurücksetzen |
+| `laundry_assistant.plan_ready_by` | Wunsch-Fertigzeit speichern (weglassen zum Löschen) |
 | `laundry_assistant.set_reminder` | Trommel-Erinnerung aktivieren und einstellen |
 | `laundry_assistant.set_notify_target` | Welcher `notify.mobile_app_*`-Dienst benachrichtigt |
 | `laundry_assistant.set_thresholds` | Bandgrenzen in Watt |

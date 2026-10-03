@@ -59,6 +59,7 @@ from .const import (
     POWER_SOURCE_OK,
     POWER_SOURCE_UNAVAILABLE,
     MIN_SAMPLES_FOR_INTERVAL_CHECK,
+    PHASE_ABORTED,
     PHASE_FINISHED,
     PHASE_IDLE,
     PHASES_BY_TYPE,
@@ -122,6 +123,14 @@ class LaundryApplianceManager:
         )
         self.price_per_kwh: float = DEFAULT_PRICE_PER_KWH
         self.currency: str = DEFAULT_CURRENCY
+        # Optional dynamic price sensor (Tibber/Octopus/ENTSO-E, software-only,
+        # no extra hardware). When set and available, it overrides the fixed
+        # price for cost calculations.
+        self.price_entity: str | None = None
+        # Power-only consumable counter: finished cycles since last reset.
+        self.cycles_since_reset: int = 0
+        # Ready-by planner: desired finish time plus derived latest start.
+        self.planned_ready_by: str | None = None
 
         self.reminder_enabled: bool = DEFAULT_REMINDER_ENABLED
         self.reminder_delay_minutes: int = DEFAULT_REMINDER_DELAY_MINUTES
@@ -203,6 +212,9 @@ class LaundryApplianceManager:
                     )
             self.price_per_kwh = data.get("price_per_kwh", DEFAULT_PRICE_PER_KWH)
             self.currency = data.get("currency", DEFAULT_CURRENCY)
+            self.price_entity = data.get("price_entity")
+            self.cycles_since_reset = data.get("cycles_since_reset", 0)
+            self.planned_ready_by = data.get("planned_ready_by")
             self.reminder_enabled = data.get("reminder_enabled", DEFAULT_REMINDER_ENABLED)
             self.reminder_delay_minutes = data.get(
                 "reminder_delay_minutes", DEFAULT_REMINDER_DELAY_MINUTES
@@ -287,6 +299,9 @@ class LaundryApplianceManager:
                 "thresholds": self.thresholds,
                 "price_per_kwh": self.price_per_kwh,
                 "currency": self.currency,
+                "price_entity": self.price_entity,
+                "cycles_since_reset": self.cycles_since_reset,
+                "planned_ready_by": self.planned_ready_by,
                 "reminder_enabled": self.reminder_enabled,
                 "reminder_delay_minutes": self.reminder_delay_minutes,
                 "reminder_repeat_minutes": self.reminder_repeat_minutes,
@@ -542,14 +557,25 @@ class LaundryApplianceManager:
         samples = [s for s in self._samples if started <= s[0] <= finished]
         energy_kwh = self._integrate_energy(samples)
         duration = (finished - started).total_seconds()
+        price = self.effective_price
+
+        # Power-only abort detection: a cycle that never reached its terminal
+        # phase (spin on a washer, cool-down on a dryer) did not finish
+        # normally - plug pulled, breaker tripped or programme cancelled.
+        seen_phases = {entry["phase"] for entry in self.phase_timeline}
+        terminal = TERMINAL_PHASE_BY_TYPE.get(self.appliance_type)
+        outcome = (
+            "finished" if terminal is None or terminal in seen_phases else "aborted"
+        )
 
         run = {
             "started": started.isoformat(),
             "finished": finished.isoformat(),
             "duration_seconds": round(duration, 1),
             "energy_kwh": round(energy_kwh, 4),
-            "cost": round(energy_kwh * self.price_per_kwh, 4),
+            "cost": round(energy_kwh * price, 4),
             "peak_watts": round(max((w for _, w in samples), default=0.0), 1),
+            "outcome": outcome,
             "timeline": [
                 {"phase": entry["phase"], "seconds": entry["seconds"]}
                 for entry in self.phase_timeline
@@ -568,13 +594,18 @@ class LaundryApplianceManager:
             # stopped" needs no phase detail. Everything that *learns* does
             # not, so it is skipped rather than fed fiction it would then
             # persist and keep applying long after the plug is fixed.
+            # Aborted runs count for energy but never for learning: a
+            # cancelled wash must not become the template for remaining time,
+            # programs, calibration or deviation warnings.
             self.total_energy_kwh = round(self.total_energy_kwh + energy_kwh, 4)
             self.runs.append(run)
             self.runs = self.runs[-MAX_STORED_RUNS:]
             self.last_run = run
-            self._schedule_reminder(finished)
+            if outcome == "finished":
+                self.cycles_since_reset += 1
+                self._schedule_reminder(finished)
 
-            if reliable:
+            if reliable and outcome == "finished":
                 # Compare against the history as it stood *before* this run,
                 # so the run is never part of its own baseline.
                 self.last_anomalies = self._detect_anomalies(run)
@@ -585,20 +616,24 @@ class LaundryApplianceManager:
                     self.hass.async_create_task(self._async_notify_anomalies())
             else:
                 self.last_anomalies = []
-                _LOGGER.warning(
-                    "%s: the power sensor reports about every %.0f s, which is "
-                    "too sparse to detect phases from. The run was recorded for "
-                    "its energy only; programs, calibration and deviation "
-                    "warnings were skipped. Configure the plug to report at "
-                    "least every %d s (on Tasmota: PowerDelta 10).",
-                    self.name,
-                    self.update_interval_seconds or 0.0,
-                    MAX_USABLE_UPDATE_INTERVAL_SECONDS,
-                )
+                if not reliable:
+                    _LOGGER.warning(
+                        "%s: the power sensor reports about every %.0f s, which is "
+                        "too sparse to detect phases from. The run was recorded for "
+                        "its energy only; programs, calibration and deviation "
+                        "warnings were skipped. Configure the plug to report at "
+                        "least every %d s (on Tasmota: PowerDelta 10).",
+                        self.name,
+                        self.update_interval_seconds or 0.0,
+                        MAX_USABLE_UPDATE_INTERVAL_SECONDS,
+                    )
 
         self.run_started = None
-        self.phase = PHASE_FINISHED if duration >= RUN_START_SECONDS * 3 else PHASE_IDLE
-        self.confidence = 1.0 if self.phase == PHASE_FINISHED else 0.0
+        if duration < RUN_START_SECONDS * 3:
+            self.phase = PHASE_IDLE
+        else:
+            self.phase = PHASE_FINISHED if outcome == "finished" else PHASE_ABORTED
+        self.confidence = 1.0 if self.phase in (PHASE_FINISHED, PHASE_ABORTED) else 0.0
         self._phase_since = finished
         self._samples = []
         self.hass.async_create_task(self._async_save())
@@ -643,14 +678,28 @@ class LaundryApplianceManager:
         return int((dt_util.utcnow() - self.run_started).total_seconds())
 
     @property
+    def _finished_runs(self) -> list[dict[str, Any]]:
+        """Stored runs that completed normally (backwards compatible)."""
+        return [r for r in self.runs if r.get("outcome", "finished") == "finished"]
+
+    @property
+    def last_outcome(self) -> str | None:
+        if self.last_run:
+            return self.last_run.get("outcome", "finished")
+        return None
+
+    @property
     def estimated_total_seconds(self) -> int | None:
         """Expected total duration of the run in progress.
 
         Derived from stored runs whose phase sequence matches the current
         one so far, rather than from a fixed program table - programs differ
         per machine, and the same program differs with load size.
+        Aborted runs are excluded: a cancelled wash must not shape the
+        expectation for a normal one.
         """
-        if self.run_started is None or not self.runs:
+        finished = self._finished_runs
+        if self.run_started is None or not finished:
             return None
 
         # A recognised program is the sharpest answer available: it is the
@@ -663,14 +712,14 @@ class LaundryApplianceManager:
         completed = [entry["phase"] for entry in self.phase_timeline]
         matching = [
             run["duration_seconds"]
-            for run in self.runs
+            for run in finished
             if [e["phase"] for e in run.get("timeline", [])][: len(completed)] == completed
         ]
         if not matching:
             # No run has gone this way before. Fall back to the overall
             # average, which is still a better answer than nothing once a
             # few runs exist, but never invent one from thin air.
-            matching = [run["duration_seconds"] for run in self.runs]
+            matching = [run["duration_seconds"] for run in finished]
         if not matching:
             return None
         return int(statistics.median(matching))
@@ -709,7 +758,25 @@ class LaundryApplianceManager:
 
     @property
     def cycle_cost(self) -> float:
-        return round(self.cycle_energy_kwh * self.price_per_kwh, 3)
+        return round(self.cycle_energy_kwh * self.effective_price, 3)
+
+    @property
+    def effective_price(self) -> float:
+        """Price per kWh actually used for costing.
+
+        Reads the optional dynamic price sensor (software-only, e.g. Tibber)
+        when it is configured and available, otherwise the fixed price.
+        """
+        if self.price_entity:
+            state = self.hass.states.get(self.price_entity)
+            if state is not None and state.state not in (None, "", "unknown", "unavailable"):
+                try:
+                    value = float(state.state)
+                    if 0 <= value <= 10:
+                        return value
+                except (TypeError, ValueError):
+                    pass
+        return self.price_per_kwh
 
     def _week_runs(self) -> list[dict[str, Any]]:
         """Runs finished in the current week.
@@ -731,7 +798,7 @@ class LaundryApplianceManager:
 
     @property
     def week_cycles(self) -> int:
-        return len(self._week_runs())
+        return sum(1 for r in self._week_runs() if r.get("outcome", "finished") == "finished")
 
     @property
     def week_energy_kwh(self) -> float:
@@ -740,6 +807,45 @@ class LaundryApplianceManager:
     @property
     def week_cost(self) -> float:
         return round(sum(run["cost"] for run in self._week_runs()), 2)
+
+    def _month_runs(self) -> list[dict[str, Any]]:
+        """Runs finished in the current calendar month (local time)."""
+        now = dt_util.now()
+        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        result = []
+        for run in self.runs:
+            finished = dt_util.parse_datetime(run["finished"])
+            if finished is not None and dt_util.as_local(finished) >= start:
+                result.append(run)
+        return result
+
+    @property
+    def month_cycles(self) -> int:
+        return sum(1 for r in self._month_runs() if r.get("outcome", "finished") == "finished")
+
+    @property
+    def month_energy_kwh(self) -> float:
+        return round(sum(run["energy_kwh"] for run in self._month_runs()), 3)
+
+    @property
+    def month_cost(self) -> float:
+        return round(sum(run["cost"] for run in self._month_runs()), 2)
+
+    @property
+    def planned_latest_start(self) -> datetime | None:
+        """Latest start time to be ready by the planned ready-by time."""
+        if not self.planned_ready_by:
+            return None
+        ready_by = dt_util.parse_datetime(self.planned_ready_by)
+        if ready_by is None:
+            return None
+        total = self.estimated_total_seconds
+        if total is None:
+            finished = self._finished_runs
+            if not finished:
+                return None
+            total = int(statistics.median(r["duration_seconds"] for r in finished))
+        return ready_by - timedelta(seconds=total)
 
     @property
     def update_interval_seconds(self) -> float | None:
@@ -1094,7 +1200,7 @@ class LaundryApplianceManager:
     def _detect_anomalies(self, run: dict[str, Any]) -> list[dict[str, Any]]:
         if not self.anomaly_detection_enabled:
             return []
-        return find_anomalies(run, self.runs, self.anomaly_factor, ANOMALY_MIN_RUNS)
+        return find_anomalies(run, self._finished_runs, self.anomaly_factor, ANOMALY_MIN_RUNS)
 
     def describe_anomaly(self, finding: dict[str, Any]) -> str:
         """Render one finding as a sentence in the instance language."""
@@ -1206,6 +1312,27 @@ class LaundryApplianceManager:
         self.price_per_kwh = price_per_kwh
         if currency:
             self.currency = currency
+        await self._async_save()
+        self._notify_listeners()
+
+    async def async_set_price_sensor(self, price_entity: str | None) -> None:
+        """Point at a dynamic price sensor, or clear it to use the fixed price."""
+        self.price_entity = price_entity
+        await self._async_save()
+        self._notify_listeners()
+
+    async def async_reset_consumable_counter(self) -> None:
+        self.cycles_since_reset = 0
+        await self._async_save()
+        self._notify_listeners()
+
+    async def async_plan_ready_by(self, ready_by: str | None) -> None:
+        """Store a desired ready-by time; latest start is derived from it."""
+        if ready_by is not None:
+            parsed = dt_util.parse_datetime(ready_by)
+            if parsed is None:
+                raise ValueError(f"Cannot parse ready_by datetime: {ready_by}")
+        self.planned_ready_by = ready_by
         await self._async_save()
         self._notify_listeners()
 

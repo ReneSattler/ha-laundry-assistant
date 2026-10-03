@@ -58,7 +58,8 @@
           "drying": "Drying",
           "cooldown": "Cooling down",
           "running": "Running",
-          "finished": "Finished"
+          "finished": "Finished",
+          "aborted": "Aborted"
         }
       },
       "remaining": {
@@ -79,11 +80,23 @@
       "week_cost": {
         "name": "Cost this week"
       },
+      "month_cycles": {
+        "name": "Cycles this month"
+      },
+      "month_energy": {
+        "name": "Energy this month"
+      },
+      "month_cost": {
+        "name": "Cost this month"
+      },
       "total_energy": {
         "name": "Total energy"
       },
       "finishes_at": {
         "name": "Finishes at"
+      },
+      "latest_start": {
+        "name": "Latest start"
       }
     },
     "binary_sensor": {
@@ -294,6 +307,44 @@
         "enabled": {
           "name": "Enabled",
           "description": "Whether to mention the dryer."
+        }
+      }
+    },
+    "set_price_sensor": {
+      "name": "Set dynamic price source",
+      "description": "Points the appliance at a price sensor (e.g. Tibber). Leave empty to use the fixed price.",
+      "fields": {
+        "entry_id": {
+          "name": "Appliance",
+          "description": "The entry_id of the appliance, from the phase sensor's attributes."
+        },
+        "price_entity": {
+          "name": "Price sensor",
+          "description": "Sensor reporting the current price per kWh."
+        }
+      }
+    },
+    "reset_consumable_counter": {
+      "name": "Reset consumable counter",
+      "description": "Resets the count of finished cycles since the last reset (detergent, decalcification).",
+      "fields": {
+        "entry_id": {
+          "name": "Appliance",
+          "description": "The entry_id of the appliance, from the phase sensor's attributes."
+        }
+      }
+    },
+    "plan_ready_by": {
+      "name": "Plan ready-by time",
+      "description": "Stores when the laundry should be ready; the latest start is derived from the learned duration.",
+      "fields": {
+        "entry_id": {
+          "name": "Appliance",
+          "description": "The entry_id of the appliance, from the phase sensor's attributes."
+        },
+        "ready_by": {
+          "name": "Ready by",
+          "description": "ISO datetime when the cycle should be done. Leave empty to clear the plan."
         }
       }
     }

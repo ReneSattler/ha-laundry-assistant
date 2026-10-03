@@ -41,12 +41,15 @@ from .const import (
     SERVICE_CLEAR_HISTORY,
     SERVICE_DISMISS_ANOMALIES,
     SERVICE_DISMISS_REMINDER,
+    SERVICE_PLAN_READY_BY,
+    SERVICE_RESET_CONSUMABLE_COUNTER,
     SERVICE_SET_ANOMALY_DETECTION,
     SERVICE_SET_CHAIN_TO_DRYER,
     SERVICE_SET_NOTIFY_TARGET,
+    SERVICE_SET_PRICE,
+    SERVICE_SET_PRICE_SENSOR,
     SERVICE_SET_PROGRAM_NAME,
     SERVICE_SET_SOLAR,
-    SERVICE_SET_PRICE,
     SERVICE_SET_REMINDER,
     SERVICE_SET_THRESHOLDS,
     SERVICE_START_CALIBRATION,
@@ -107,6 +110,18 @@ SET_CHAIN_TO_DRYER_SCHEMA = vol.Schema(
     {
         vol.Required("entry_id"): cv.string,
         vol.Required("enabled"): cv.boolean,
+    }
+)
+SET_PRICE_SENSOR_SCHEMA = vol.Schema(
+    {
+        vol.Required("entry_id"): cv.string,
+        vol.Optional("price_entity"): vol.Any(cv.entity_id, None),
+    }
+)
+PLAN_READY_BY_SCHEMA = vol.Schema(
+    {
+        vol.Required("entry_id"): cv.string,
+        vol.Optional("ready_by"): vol.Any(cv.string, None),
     }
 )
 SET_THRESHOLDS_SCHEMA = vol.Schema(
@@ -337,6 +352,21 @@ def _async_register_services(hass: HomeAssistant) -> None:
             call.data.get("feed_in_tariff"),
         )
 
+    async def handle_set_price_sensor(call: ServiceCall) -> None:
+        manager = _get_manager(hass, call.data["entry_id"])
+        await manager.async_set_price_sensor(call.data.get("price_entity"))
+
+    async def handle_reset_consumable_counter(call: ServiceCall) -> None:
+        manager = _get_manager(hass, call.data["entry_id"])
+        await manager.async_reset_consumable_counter()
+
+    async def handle_plan_ready_by(call: ServiceCall) -> None:
+        manager = _get_manager(hass, call.data["entry_id"])
+        try:
+            await manager.async_plan_ready_by(call.data.get("ready_by"))
+        except ValueError as err:
+            raise ServiceValidationError(str(err)) from err
+
     hass.services.async_register(
         DOMAIN, SERVICE_SET_PRICE, handle_set_price, schema=SET_PRICE_SCHEMA
     )
@@ -393,4 +423,19 @@ def _async_register_services(hass: HomeAssistant) -> None:
     )
     hass.services.async_register(
         DOMAIN, SERVICE_SET_SOLAR, handle_set_solar, schema=SET_SOLAR_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SET_PRICE_SENSOR,
+        handle_set_price_sensor,
+        schema=SET_PRICE_SENSOR_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_RESET_CONSUMABLE_COUNTER,
+        handle_reset_consumable_counter,
+        schema=ENTRY_ID_ONLY_SCHEMA,
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_PLAN_READY_BY, handle_plan_ready_by, schema=PLAN_READY_BY_SCHEMA
     )
