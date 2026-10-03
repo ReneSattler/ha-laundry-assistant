@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.1 - 2026-10-03
+
+### Fixed
+
+- **The new `aborted` phase had no label in the Lovelace card.** The 0.4.0
+  backend could report it, but the card's string tables (English and
+  German) did not know it, so CI failed on
+  `test_the_card_translates_every_phase_too`. Added `Aborted` /
+  `Abgebrochen` plus a timeline colour. This is the one failure the 0.4.0
+  workflows reported; everything else was green.
+
 ## 0.4.0 - 2026-10-03
 
 Power-only features: everything here is derived from the watt curve plus
